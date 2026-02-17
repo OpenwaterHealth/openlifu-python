@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, Tuple, Type
 
@@ -12,6 +13,8 @@ from openlifu.plan.param_constraint import PARAM_STATUS_SYMBOLS, ParameterConstr
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.dict_conversion import DictMixin
 from openlifu.util.units import getunitconversion, getunittype
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ORIGIN = np.zeros(3)
 
@@ -46,7 +49,8 @@ PARAM_FORMATS = {
     "power_W": [None, "0.2f", "W", "Emitted Power"],
     "duty_cycle_pulse_train_pct": [None, "0.1f", "%", "Pulse Train Duty Cycle"],
     "duty_cycle_sequence_pct": [None, "0.1f", "%", "Sequence Duty Cycle"],
-    "sequence_duration_s": [None, "0.0f", "s", "Sequence Duration"],}
+    "sequence_duration_s": [None, "0.0f", "s", "Sequence Duration"],
+    "estimated_tx_temperature_rise_C": [None, "0.2f", "°C", "Estimated TX Temperature Rise"]}
 
 @dataclass
 class SolutionAnalysis(DictMixin):
@@ -143,6 +147,8 @@ class SolutionAnalysis(DictMixin):
     sequence_duration_s: Annotated[float | None, OpenLIFUFieldData("Sequence duration (s)", "Total duration of the sequence (s)")] = None
     """Total duration of the sequence (s)"""
 
+    estimated_tx_temperature_rise_C: Annotated[float | None, OpenLIFUFieldData("Estimated TX temperature rise (°C)", "Estimated temperature rise (assume 30°C baseline)")] = None
+    """Estimated temperature rise in Celsius (assume 30°C baseline)"""
 
     param_constraints: Annotated[Dict[str, ParameterConstraint], OpenLIFUFieldData("Parameter constraints", None)] = field(default_factory=dict)
     """TODO: Add description"""
@@ -576,3 +582,69 @@ def get_beamwidth(
     negoff, posoff = get_beam_bounds(da, focus=focus, dim=dim, cutoff=float(cutoff), origin=origin, min_offset=min_offset, max_offset=max_offset)
     bw = posoff - negoff
     return bw
+
+def model_tx_temperature_rise(voltage: float,
+                              t_sec: float,
+                              duty_cycle: float=1.0,
+                              apodization_fraction: float=1.0,
+                              frequency_kHz: float=400.0,
+                              T0_degC: float = 30.0):
+    """
+    Temperature prediction function for thermal modeling.
+
+    Based on physics-based power decay gradient model fitted from experimental data.
+    Model: dT/dt = (t + t_shift)^(-n) + C
+
+    Parameters:
+    -----------
+    voltage: float
+        Voltage to use when running sonication.
+    duty_cycle: float
+        Duty cycle of the sonication.
+    apodization_fraction: float
+        Fraction of apodization applied.
+    frequency_kHz: float
+        Frequency in kHz.
+    t_sec: float
+        Time in seconds for which to predict temperature rise.
+    T0_degC: float
+        Initial temperature in Celsius. Default is 30.0°C.
+
+    Returns:
+    --------
+    float
+        Predicted temperature rise in Celsius
+    """
+    P = voltage**2 * duty_cycle
+    P = P * apodization_fraction
+    t = t_sec
+    T0 = T0_degC
+
+    if T0 < 20 or T0 > 40:
+        logger.warning("Initial temperature T0 must be between 20 and 40 degrees Celsius for the model to be valid.")
+
+    if P < 50 or P > 500:
+        logger.warning("Squared Voltage must be between 50 and 500 V^2 for the model to be valid.")
+
+    if t < 1 or t > 600:
+        logger.warning("Time t must be between 1 and 600 seconds for the model to be valid.")
+
+    if frequency_kHz < 380 or frequency_kHz > 420:
+        logger.warning("Frequency must be between 380 and 420 kHz for the model to be valid.")
+
+    # Predict power law parameters using polynomial regression (degree 2)
+    n = (2.131832 + -0.003475*P + -0.044916*T0 +
+        0.000002*P*P + 0.000049*P*T0 + 0.000474*T0*T0)
+
+    t_shift = (1.074525 + 0.101532*P + -0.097741*T0 +
+            -0.000080*P*P + -0.001891*P*T0 + 0.005975*T0*T0)
+
+    C = (0.051572 + -0.000072*P + -0.001668*T0 +
+        -0.000000*P*P + 0.000004*P*T0 + 0.000007*T0*T0)
+
+    # Apply integrated power decay gradient model
+    t_adj = t + t_shift
+    integral_term = (t_adj**(1-n) - t_shift**(1-n)) / (1 - n)
+    temperature_rise_C = integral_term + C * t
+
+    return temperature_rise_C
