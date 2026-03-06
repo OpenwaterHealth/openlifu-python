@@ -7,7 +7,6 @@ import requests
 import urllib3
 from requests.adapters import HTTPAdapter
 
-from openlifu.cloud.const import API_URL
 from openlifu.cloud.utils import logger_cloud, to_json
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -34,7 +33,8 @@ class SlicerAdapter(HTTPAdapter):
 class Request:
     TIMEOUT = (5, 300)
 
-    def __init__(self):
+    def __init__(self, api_url: str):
+        self._api_url = api_url
         self.headers = {}
         self.session = requests.Session()
         adapter = SlicerAdapter(
@@ -48,7 +48,7 @@ class Request:
 
     def get(self, url: str) -> str:
         start = time.perf_counter()
-        response = self.session.get(API_URL + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.get(self._api_url + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("GET", url, start, response.status_code)
 
         logger_cloud.debug(f"GET: {url}, status_code: {response.status_code}\nresponse: {response.text}")
@@ -57,7 +57,7 @@ class Request:
 
     def get_bytes(self, url: str) -> bytes:
         start = time.perf_counter()
-        response = self.session.get(API_URL + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.get(self._api_url + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("GET_BYTES", url, start, response.status_code)
 
         logger_cloud.debug(f"GET bytes: {url}, status_code: {response.status_code}")
@@ -66,7 +66,7 @@ class Request:
 
     def post(self, url: str, dto) -> str:
         start = time.perf_counter()
-        response = self.session.post(API_URL + url, data=to_json(dto), headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.post(self._api_url + url, data=to_json(dto), headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("POST", url, start, response.status_code)
 
         logger_cloud.debug(f"POST: {url}, body: {to_json(dto)}, status_code: {response.status_code}\nresponse: {response.text}")
@@ -75,7 +75,7 @@ class Request:
 
     def post_bytes(self, url: str, data) -> str:
         start = time.perf_counter()
-        response = self.session.post(API_URL + url, data=data, headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.post(self._api_url + url, data=data, headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("POST_BYTES", url, start, response.status_code)
 
         logger_cloud.debug(f"POST bytes: {url}, status_code: {response.status_code}\nresponse: {response.text}")
@@ -84,7 +84,7 @@ class Request:
 
     def put(self, url: str, dto) -> str:
         start = time.perf_counter()
-        response = self.session.put(API_URL + url, data=to_json(dto), headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.put(self._api_url + url, data=to_json(dto), headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("PUT", url, start, response.status_code)
 
         logger_cloud.debug(f"PUT: {url}, body: {to_json(dto)}, status_code: {response.status_code}\nresponse: {response.text}")
@@ -93,7 +93,7 @@ class Request:
 
     def delete(self, url: str) -> str:
         start = time.perf_counter()
-        response = self.session.delete(API_URL + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
+        response = self.session.delete(self._api_url + url, headers=self.headers, timeout=self.TIMEOUT, verify=False)
         self._log_request("DELETE", url, start, response.status_code)
 
         logger_cloud.debug(f"DELETE: {url}, status_code: {response.status_code}\nresponse: {response.text}")
