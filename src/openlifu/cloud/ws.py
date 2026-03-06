@@ -5,14 +5,14 @@ from typing import Callable
 import socketio
 from socketio import exceptions
 
-from openlifu.cloud.const import API_URL
 from openlifu.cloud.utils import logger_cloud
 
 DATABASE_UPDATES_NS = "/database_updates"
 
 class Websocket:
 
-    def __init__(self, update_callback: Callable[[dict], None]):
+    def __init__(self, api_url: str, update_callback: Callable[[dict], None]):
+        self._api_url = api_url
         self._sio: socketio.Client | None = None
         self._database_id = None
         self._auth = {}
@@ -28,7 +28,7 @@ class Websocket:
             self.connect(self._database_id)
 
     def connect(self, database_id: int):
-        self.log(f"Attempting connection to {API_URL} for DB {database_id}")
+        self.log(f"Attempting connection to {self._api_url} for DB {database_id}")
 
         if self._sio is not None:
             self.disconnect()
@@ -71,7 +71,7 @@ class Websocket:
 
         try:
             self._sio.connect(
-                f"{API_URL}/socket.io",
+                f"{self._api_url}/socket.io",
                 auth=self._auth,
                 namespaces=[DATABASE_UPDATES_NS],
                 transports=["websocket"],
