@@ -21,6 +21,7 @@ from openlifu.cloud.components.systems import Systems
 from openlifu.cloud.components.transducers import Transducers
 from openlifu.cloud.components.users import Users
 from openlifu.cloud.components.volumes import Volumes
+from openlifu.cloud.const import API_URL_DEV, API_URL_PROD, ENV_DEV, ENV_PROD
 from openlifu.cloud.filesystem_observer import FilesystemObserver
 from openlifu.cloud.status import Status
 from openlifu.cloud.sync_thread import SyncThread
@@ -30,10 +31,14 @@ from openlifu.cloud.ws import Websocket
 
 class Cloud:
 
-    def __init__(self):
+    def __init__(self, environment: str = ENV_PROD):
+        if environment == ENV_DEV:
+            api_url = API_URL_DEV
+        else:
+            api_url = API_URL_PROD
         self._filesystem_observer = FilesystemObserver(self._on_file_system_update)
-        self._api = Api()
-        self._websocket = Websocket(self._on_websocket_update)
+        self._api = Api(api_url)
+        self._websocket = Websocket(api_url, self._on_websocket_update)
         self._components: List[AbstractComponent] = []
         self._sync_thread = SyncThread(self._on_status_changed)
         self._db_path: Path | None = None
@@ -172,7 +177,7 @@ if __name__ == "__main__":
     logger_cloud.setLevel(logging.DEBUG)
     logger_cloud.addHandler(logging.StreamHandler(sys.stdout))
 
-    cloud = Cloud()
+    cloud = Cloud(ENV_DEV)
     token = os.getenv("TOKEN")
     db_path = os.getenv("DB_PATH")
 

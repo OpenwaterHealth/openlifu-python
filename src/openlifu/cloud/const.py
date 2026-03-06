@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-API_URL = "https://api.openwater.health"
+API_URL_PROD = "https://api.openwater.health"
+API_URL_DEV = "https://dev.api.openwater.health"
+
+ENV_PROD = "prod"
+ENV_DEV = "dev"
 
 CONFIG_FILE = "config"
 DATA_FILE = "data"
