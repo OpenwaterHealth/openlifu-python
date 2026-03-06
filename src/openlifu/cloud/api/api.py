@@ -16,8 +16,8 @@ from openlifu.cloud.api.volumes_api import VolumesApi
 
 class Api:
 
-    def __init__(self):
-        self._request = Request()
+    def __init__(self, api_url: str):
+        self._request = Request(api_url)
         self._request.debug_log = True
         self._databases = DatabasesApi(self._request)
         self._protocols = ProtocolsApi(self._request)
