@@ -58,6 +58,12 @@ class Transducer:
     sensitivity: Annotated[float | None, OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V)")] = None
     """Sensitivity of the element (Pa/V)"""
 
+    crosstalk_frac: Annotated[float, OpenLIFUFieldData("Crosstalk fraction", "Fraction of the signal that leaks into other elements due to crosstalk")] = 0.0
+    """Fraction of the signal that leaks into other elements due to crosstalk"""
+
+    crosstalk_dist: Annotated[float, OpenLIFUFieldData("Crosstalk distance", "Distance within which elements experience crosstalk")] = 0.0
+    """Distance within which elements experience crosstalk"""
+
     impulse_response: Annotated[np.ndarray | None, OpenLIFUFieldData("Impulse response", "Impulse response of the element")] = None
     """Impulse response of the element, can be a single value or an array of values. If an array, `impulse_dt` must be set to the time step of the impulse response. Is convolved with the input signal."""
 
@@ -98,12 +104,12 @@ class Transducer:
         if apod is None:
             apod = np.ones(self.numelements())
         if self.impulse_response is None:
-            filtered_input_signal = input_signal
+            filtered_input_signal = input_signal * 1
         else:
             impulse = self.interp_impulse_response(dt)
             filtered_input_signal = np.convolve(input_signal, impulse, mode='full')
         if self.sensitivity is not None:
-            filtered_input_signal *= self.sensitivity
+            filtered_input_signal = filtered_input_signal * self.sensitivity
         outputs = [np.concatenate([np.zeros(int(delay/dt)), a*element.calc_output(filtered_input_signal, dt)],axis=0) for element, delay, a, in zip(self.elements, delays, apod)]
         max_len = max([len(o) for o in outputs])
         output_signal = np.zeros([self.numelements(), max_len])

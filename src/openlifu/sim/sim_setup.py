@@ -45,7 +45,7 @@ class SimSetup(DictMixin):
     c0: Annotated[float, OpenLIFUFieldData("Speed of Sound (m/s)", "Reference speed of sound for converting distance to time")] = 1500.0
     """Reference speed of sound for converting distance to time"""
 
-    cfl: Annotated[float, OpenLIFUFieldData("CFL number", "Courant-Friedrichs-Lewy number")] = 0.5
+    cfl: Annotated[float, OpenLIFUFieldData("CFL number", "Courant-Friedrichs-Lewy number")] = 0.3
     """Courant-Friedrichs-Lewy number"""
 
     options: Annotated[dict[str, str], OpenLIFUFieldData("Simulation options", "Additional simulation options")] = field(default_factory=dict)
