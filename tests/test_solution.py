@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import xarray as xa
 from helpers import dataclasses_are_equal
+from pytest_mock import MockerFixture
 
 from openlifu import Point, Pulse, Sequence, Solution, Transducer
 from openlifu.bf.focal_patterns import SinglePoint
@@ -318,3 +319,60 @@ def test_solution_analyze_ratios(example_solution: Solution):
     assert analysis_case7.mainlobe_isppa_Wcm2[0] == 0.0
     assert analysis_case7.sidelobe_isppa_Wcm2[0] == 0.0
     assert np.isnan(analysis_case7.sidelobe_to_mainlobe_intensity_ratio[0]) # 0 / 0 == nan
+
+
+@pytest.mark.parametrize("force_cpu", [True, False])
+@pytest.mark.parametrize("gpu_is_available", [True, False])
+def test_solution_simulate_gpu_handling(
+    mocker: MockerFixture,
+    example_solution: Solution,
+    force_cpu: bool,
+    gpu_is_available: bool,
+):
+    """Test that the correct GPU flag is passed to run_simulation in solution.simulate"""
+    example_simulation_output = xa.Dataset(
+        {
+            'p_min': xa.DataArray(data=np.empty((3, 2, 3)), dims=["x", "y", "z"], attrs={'units': "Pa"}),
+            'p_max': xa.DataArray(data=np.empty((3, 2, 3)), dims=["x", "y", "z"], attrs={'units': "Pa"}),
+            'intensity': xa.DataArray(data=np.empty((3, 2, 3)), dims=["x", "y", "z"], attrs={'units': "W/cm^2"}),
+        },
+        coords={
+            'x': xa.DataArray(dims=["x"], data=np.linspace(0, 1, 3), attrs={'units': "m"}),
+            'y': xa.DataArray(dims=["y"], data=np.linspace(0, 1, 2), attrs={'units': "m"}),
+            'z': xa.DataArray(dims=["z"], data=np.linspace(0, 1, 3), attrs={'units': "m"}),
+        },
+    )
+    mocker.patch(
+        "openlifu.plan.solution.gpu_available",
+        return_value=gpu_is_available,
+    )
+    run_simulation_mock = mocker.patch(
+        "openlifu.plan.solution.run_simulation",
+        return_value=example_simulation_output
+    )
+
+    # Create params dataset for simulation
+    params = xa.Dataset(
+        {
+            'density': xa.DataArray(data=np.ones((3, 2, 3)), dims=["x", "y", "z"], attrs={'units': "kg/m^3"}),
+            'sound_speed': xa.DataArray(data=np.ones((3, 2, 3)) * 1500, dims=["x", "y", "z"], attrs={'units': "m/s"}),
+        },
+        coords={
+            'x': xa.DataArray(dims=["x"], data=np.linspace(0, 1, 3), attrs={'units': "m"}),
+            'y': xa.DataArray(dims=["y"], data=np.linspace(0, 1, 2), attrs={'units': "m"}),
+            'z': xa.DataArray(dims=["z"], data=np.linspace(0, 1, 3), attrs={'units': "m"}),
+        },
+    )
+
+    example_solution.simulate(
+        params=params,
+        _force_cpu=force_cpu,
+    )
+
+    args, kwargs = run_simulation_mock.call_args
+    # If force_cpu is True, GPU should always be False
+    # Otherwise, GPU should match gpu_available()
+    if force_cpu:
+        assert not(kwargs['gpu'])
+    else:
+        assert kwargs['gpu'] == gpu_is_available

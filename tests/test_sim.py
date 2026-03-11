@@ -41,7 +41,7 @@ def test_run_simulation_runs():
     apod[:] = 1.0
 
 
-    dataset, _ = openlifu.sim.run_simulation(
+    dataset = openlifu.sim.run_simulation(
         arr=transducer,
         params=params,
         delays=delays,

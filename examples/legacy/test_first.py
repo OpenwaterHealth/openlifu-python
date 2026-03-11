@@ -73,7 +73,7 @@ delays, apod = protocol.beamform(arr=arr, target=pts[0], params=params)
 # Now we are ready to run the simulation.  Some custom edits to `k-wave-python` allow for caching of the gridweights, which only need to be computed once for a given grid size and source location.  This can speed up the simulation significantly, especially if a coarse grid that won't take the GPU too long to run is used.
 
 # %%
-(ds, output) = openlifu.sim.run_simulation(arr=arr,
+ds = openlifu.sim.run_simulation(arr=arr,
         params=params,
         delays=delays,
         apod= apod,
