@@ -98,7 +98,7 @@ def run_simulation(arr: xdc.Transducer,
     delays = delays if delays is not None else np.zeros(arr.numelements())
     apod = apod if apod is not None else np.ones(arr.numelements())
     kgrid = get_kgrid(params.coords, dt=dt, t_end=t_end, cfl=cfl)
-    t = np.arange(0, cycles / freq, kgrid.dt)
+    t = np.arange(0, np.min([cycles / freq, (kgrid.Nt-np.ceil(max(delays)/kgrid.dt))*kgrid.dt]), kgrid.dt)
     input_signal = amplitude * np.sin(2 * np.pi * freq * t)
     source_mat = arr.calc_output(input_signal, kgrid.dt, delays, apod)
     units = [params[dim].attrs['units'] for dim in params.dims]
