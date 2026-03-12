@@ -385,32 +385,6 @@ class Database:
 
         self.logger.info(f"Added transducer with ID {transducer_id} to the database.")
 
-    def write_system(self, system, on_conflict=OnConflictOpts.ERROR):
-        system_id = system.id
-        system_ids = self.get_system_ids()
-
-        if system_id in system_ids:
-            if on_conflict == OnConflictOpts.ERROR:
-                raise ValueError(f"Ultrasound system with ID {system_id} already exists in the database.")
-            elif on_conflict == OnConflictOpts.OVERWRITE:
-                self.logger.info(f"Overwriting ultrasound system with ID {system_id} in the database.")
-            elif on_conflict == OnConflictOpts.SKIP:
-                self.logger.info(f"Skipping ultrasound system with ID {system_id} as it already exists.")
-                return
-            else:
-                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
-
-        system_data = system.to_json()
-        system_filename = self.get_system_filename(system_id)
-        with open(system_filename, "w") as f:
-            json.dump(system_data, f)
-
-        if system_id not in system_ids:
-            system_ids.append(system_id)
-            self.write_system_ids(system_ids)
-
-        self.logger.info(f"Added ultrasound system with ID {system_id} to the database.")
-
     def write_volume(self, subject_id, volume_id, volume_name, volume_data_filepath, on_conflict=OnConflictOpts.ERROR):
         if not Path(volume_data_filepath).exists():
             raise ValueError(f'Volume data filepath does not exist: {volume_data_filepath}')
@@ -608,18 +582,6 @@ class Database:
         # Implement the logic to get subject table
         raise NotImplementedError("Method not yet implemented")
 
-    def get_connected_systems(self):
-        connected_system_filename = self.get_connected_system_filename()
-
-        if os.path.isfile(connected_system_filename):
-            with open(connected_system_filename) as file:
-                connected_systems = file.read().strip().split(',')
-            self.logger.info("Connected systems: %s", connected_systems)
-            return connected_systems
-        else:
-            self.logger.warning("Connected systems file not found.")
-            return []
-
     def get_connected_transducer(self, options=None):
         connected_transducer_filename = self.get_connected_transducer_filename()
 
@@ -738,33 +700,6 @@ class Database:
         else:
             self.logger.warning("Subjects file not found.")
             return []
-
-    def get_system_ids(self):
-        systems_filename = self.get_systems_filename()
-
-        if os.path.isfile(systems_filename):
-            with open(systems_filename) as file:
-                system_data = json.load(file)
-                system_ids = system_data.get("system_ids", [])
-            self.logger.info("System IDs: %s", system_ids)
-            return system_ids
-        else:
-            self.logger.warning("Systems file not found.")
-            return []
-
-    def get_system_info(self, sys_id):
-        raise NotImplementedError("UltrasoundSystem is not yet implemented")
-        system_filename = self.get_system_filename(sys_id)
-
-        if os.path.isfile(system_filename):
-            with open(system_filename) as file:
-                system_data = json.load(file)
-                system_info = UltrasoundSystem.from_dict(system_data)
-            self.logger.info("System info for system %s: %s", sys_id, system_info)
-            return system_info
-        else:
-            self.logger.warning("System info file not found for system %s.", sys_id)
-            return None
 
     def get_transducer_ids(self):
         transducers_filename = self.get_transducers_filename()
@@ -901,13 +836,6 @@ class Database:
         standoff_filename = self.get_standoff_filename(transducer_id, standoff_id)
         standoff = Standoff.from_file(standoff_filename)
         return standoff
-
-    def load_system(self, sys_id=None):
-        raise NotImplementedError("UltrasoundSystem is not yet implemented")
-        sys_id = sys_id or self.get_connected_systems()
-        sys_filename = self.get_system_filename(sys_id)
-        sys = UltrasoundSystem.from_file(sys_filename)
-        return sys
 
     def load_transducer(self, transducer_id, convert_array:bool = True) -> Transducer|TransducerArray:
         """Given a transducer_id, reads the corresponding transducer file from database and returns a transducer object.
@@ -1056,9 +984,6 @@ class Database:
         with open(filename, 'w') as f:
             f.write(trans_id)
 
-    def get_connected_system_filename(self):
-        return Path(self.path) / "systems" / "connected_system.txt"
-
     def get_connected_transducer_filename(self):
         return Path(self.path) / 'transducers' / 'connected_transducer.txt'
 
@@ -1129,12 +1054,6 @@ class Database:
 
     def get_subjects_filename(self):
         return Path(self.path) / 'subjects' / 'subjects.json'
-
-    def get_systems_filename(self):
-        return Path(self.path) / 'systems' / 'systems.json'
-
-    def get_system_filename(self, system_id):
-        return Path(self.path) / 'systems' / system_id / f'{system_id}.json'
 
     def get_transducer_filename(self, transducer_id):
         return Path(self.path) / 'transducers' / transducer_id / f'{transducer_id}.json'
@@ -1254,7 +1173,7 @@ class Database:
         Initializes an empty database at the given database_filepath
         """
         database_filepath = Path(database_filepath)
-        subdirs = ["protocols", "users", "subjects", "transducers", "systems"]
+        subdirs = ["protocols", "users", "subjects", "transducers"]
         for subdir in subdirs:
             (database_filepath / subdir).mkdir(parents=True, exist_ok=True)
 
