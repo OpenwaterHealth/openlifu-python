@@ -6,6 +6,7 @@ Welcome to openlifu's documentation!
    :caption: Contents:
 
    includeme
+   architecture
    api
 
 Indices and tables
