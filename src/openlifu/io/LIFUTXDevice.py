@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Dict, List, Literal
 import numpy as np
 
 from openlifu.io.LIFUUart import LIFUUart
+from openlifu.io.LIFUUserConfig import LifuUserConfig
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
 
@@ -106,15 +107,18 @@ HW_ID_DATA_LENGTH = 12
 TEMPERATURE_DATA_LENGTH = 4
 
 from openlifu.io.LIFUConfig import (
+    OW_CMD,
     OW_CMD_ASYNC,
     OW_CMD_DFU,
     OW_CMD_ECHO,
     OW_CMD_GET_AMBIENT,
+    OW_CMD_GET_MODULE_COUNT,
     OW_CMD_GET_TEMP,
     OW_CMD_HWID,
     OW_CMD_PING,
     OW_CMD_RESET,
     OW_CMD_TOGGLE_LED,
+    OW_CMD_USR_CFG,
     OW_CMD_VERSION,
     OW_CONTROLLER,
     OW_CTRL_GET_SWTRIG,
@@ -126,6 +130,7 @@ from openlifu.io.LIFUConfig import (
     OW_TX7332_DEMO,
     OW_TX7332_DEVICE_COUNT,
     OW_TX7332_ENUM,
+    OW_TX7332_RBLOCK,
     OW_TX7332_RREG,
     OW_TX7332_VWBLOCK,
     OW_TX7332_VWREG,
@@ -165,9 +170,9 @@ class TxDevice:
         if self.uart and not self.uart.asyncMode:
             self.uart.check_usb_status()
             if self.uart.is_connected():
-                logger.info("TX Device connected.")
+                logger.debug("TX Device connected.")
             else:
-                logger.info("TX Device NOT Connected.")
+                logger.debug("TX Device NOT Connected.")
 
     def __parse_ti_cfg_file(self, file_path: str) -> list[tuple[str, int, int]]:
         """Parses the given configuration file and extracts all register groups, addresses, and values."""
@@ -203,7 +208,7 @@ class TxDevice:
         if self.uart and self.uart.is_connected():
             self.uart.disconnect()
 
-    def ping(self, module:int=1) -> bool:
+    def ping(self, module:int=0) -> bool:
         """
         Send a ping command to the TX device to verify connectivity.
 
@@ -219,9 +224,9 @@ class TxDevice:
                 logger.error("TX Device not connected")
                 return False
 
-            logger.info("Send Ping to Device.")
+            logger.debug("Send Ping to Device.")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_PING, addr=module)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_PING, addr=module)
             self.uart.clear_buffer()
 
             if r.packet_type == OW_ERROR:
@@ -233,11 +238,11 @@ class TxDevice:
             logger.error("ValueError: %s", v)
             raise  # Re-raise the exception for the caller to handle
 
-        except Exception as e:
-            logger.error("Unexpected error during process: %s", e)
+        except (OSError, RuntimeError, AttributeError) as e:
+            logger.exception("Unexpected error during process")
             raise  # Re-raise the exception for the caller to handle
 
-    def get_version(self, module:int=1) -> str:
+    def get_version(self, module:int=0) -> str:
         """
         Retrieve the firmware version of the TX device.
 
@@ -256,14 +261,22 @@ class TxDevice:
                 logger.error("TX Device not connected")
                 return 'v0.0.0'
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_VERSION, addr=module)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_VERSION, addr=module)
             self.uart.clear_buffer()
             r.print_packet()
             if r.data_len == 3:
                 ver = f'v{r.data[0]}.{r.data[1]}.{r.data[2]}'
+            elif r.data_len and r.data:
+                try:
+                    # Decode only the valid length, strip trailing NULs and whitespace
+                    ver_str = r.data[:r.data_len].decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                    ver = ver_str if ver_str else 'v0.0.0'
+                except (UnicodeDecodeError, TypeError) as e:
+                    logger.debug("Version decode failed: %s", e)
+                    ver = 'v0.0.0'
             else:
                 ver = 'v0.0.0'
-            logger.info(ver)
+            logger.debug(ver)
             return ver
         except ValueError as v:
             logger.error("ValueError: %s", v)
@@ -273,7 +286,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def echo(self, echo_data = None) -> tuple[bytes, int]:
+    def echo(self, module:int=0, echo_data = None) -> tuple[bytes, int]:
         """
         Send an echo command to the device with data and receive the same data in response.
 
@@ -301,7 +314,7 @@ class TxDevice:
             if echo_data is not None and not isinstance(echo_data, bytes | bytearray):
                 raise TypeError("echo_data must be a byte array")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_ECHO, data=echo_data)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_ECHO, addr=module, data=echo_data)
             self.uart.clear_buffer()
             # r.print_packet()
             if r.data_len > 0:
@@ -321,7 +334,7 @@ class TxDevice:
             logger.error("Unexpected error during echo process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def toggle_led(self, module:int=1) -> bool:
+    def toggle_led(self, module:int=0) -> bool:
         """
         Toggle the LED on the TX device.
 
@@ -337,7 +350,7 @@ class TxDevice:
                 logger.error("TX Device not connected")
                 return False
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_TOGGLE_LED, addr=module)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_TOGGLE_LED, addr=module)
             self.uart.clear_buffer()
             # r.print_packet()
             return True
@@ -350,7 +363,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def get_hardware_id(self, module:int=1) -> str:
+    def get_hardware_id(self, module:int=0) -> str:
         """
         Retrieve the hardware ID of the TX device.
 
@@ -369,7 +382,7 @@ class TxDevice:
                 logger.error("TX Device not connected")
                 return None
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_HWID, addr=module)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_HWID, addr=module)
             self.uart.clear_buffer()
             # r.print_packet()
             if r.data_len == HW_ID_DATA_LENGTH:
@@ -383,6 +396,150 @@ class TxDevice:
         except Exception as e:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
+
+    def read_config(self, module:int=0) -> Optional[LifuUserConfig]:
+        """
+        Read the user configuration from device flash.
+
+        The configuration is stored as JSON with metadata (magic, version, sequence, CRC).
+
+        Returns:
+            LifuUserConfig: Parsed configuration object, or None on error
+
+        Raises:
+            ValueError: If the UART is not connected
+            Exception: If an error occurs during communication
+        """
+        try:
+            if self.uart.demo_mode:
+                logger.info("Demo mode: returning empty config")
+                return LifuUserConfig()
+
+            if not self.uart.is_connected():
+                raise ValueError("Console Device not connected")
+
+            # Send read command (reserved=0 for READ)
+            logger.debug("Reading user config from device...")
+            r = self.uart.send_packet(
+                id=None,
+                packetType=OW_CMD,
+                addr=module,
+                command=OW_CMD_USR_CFG,
+                reserved=0  # 0 = READ
+            )
+            self.uart.clear_buffer()
+
+            if r.packet_type == OW_ERROR:
+                logger.error("Error reading config from device")
+                return None
+
+            # Parse wire format response
+            try:
+                config = LifuUserConfig.from_wire_bytes(r.data)
+                logger.debug(f"Read config: seq={config.header.seq}, json_len={config.header.json_len}")
+                return config
+            except (ValueError, TypeError) as e:
+                logger.error("Failed to parse config response: %s", e)
+                return None
+
+        except ValueError as v:
+            logger.error("ValueError: %s", v)
+            raise
+
+        except (OSError, RuntimeError, AttributeError) as e:
+            logger.exception("Unexpected error reading config")
+            raise
+
+    def write_config(self, config: LifuUserConfig, module:int=0) -> Optional[LifuUserConfig]:
+        """
+        Write user configuration to device flash.
+
+        Can pass either:
+        - Full wire format (header + JSON)
+        - Raw JSON bytes (device will parse as JSON)
+
+        Args:
+            config: LifuUserConfig object to write
+
+        Returns:
+            LifuUserConfig: Updated configuration from device (with new seq/crc), or None on error
+
+        Raises:
+            ValueError: If the UART is not connected
+            Exception: If an error occurs during communication
+        """
+        try:
+            if self.uart.demo_mode:
+                logger.info("Demo mode: simulating config write")
+                return config
+
+            if not self.uart.is_connected():
+                raise ValueError("Console Device not connected")
+
+            # Convert config to wire format bytes
+            wire_data = config.to_wire_bytes()
+
+            logger.debug(f"Writing config to device: {len(wire_data)} bytes")
+
+            # Send write command (reserved=1 for WRITE)
+            r = self.uart.send_packet(
+                id=None,
+                packetType=OW_CMD,
+                command=OW_CMD_USR_CFG,
+                addr=module,
+                reserved=1,  # 1 = WRITE
+                data=wire_data
+            )
+            self.uart.clear_buffer()
+
+            if r.packet_type == OW_ERROR:
+                logger.error("Error writing config to device")
+                return None
+
+            # Response contains only the updated 16-byte header (with new seq/crc).
+            # Reconstruct the full config by combining the updated header with the
+            # JSON data we just wrote (which is not echoed back by the firmware).
+            try:
+                from openlifu.io.LIFUUserConfig import LifuUserConfigHeader
+                updated_header = LifuUserConfigHeader.from_bytes(r.data[:16])
+                updated_config = LifuUserConfig(header=updated_header, json_data=config.json_data)
+                logger.debug(f"Config written successfully: new seq={updated_config.header.seq}")
+                return updated_config
+            except (ValueError, TypeError) as e:
+                logger.error("Failed to parse write response: %s", e)
+                return None
+
+        except ValueError as v:
+            logger.error("ValueError: %s", v)
+            raise
+
+        except (OSError, RuntimeError, AttributeError) as e:
+            logger.exception("Unexpected error writing config")
+            raise
+
+    def write_config_json(self, json_str: str, module:int=0) -> Optional[LifuUserConfig]:
+        """
+        Write user configuration from a JSON string.
+
+        This is a convenience method that creates a LifuUserConfig from JSON
+        and writes it to the device.
+
+        Args:
+            json_str: JSON string to write
+
+        Returns:
+            LifuUserConfig: Updated configuration from device, or None on error
+
+        Raises:
+            ValueError: If JSON is invalid or UART is not connected
+            Exception: If an error occurs during communication
+        """
+        try:
+            config = LifuUserConfig()
+            config.set_json_str(json_str)
+            return self.write_config(module=module, config=config)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON: {e}")
 
     def get_temperature(self, module:int=1) -> float:
         """
@@ -425,7 +582,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def get_ambient_temperature(self, module:int=1) -> float:
+    def get_ambient_temperature(self, module:int=0) -> float:
         """
         Retrieve the ambient temperature reading from the TX device.
 
@@ -558,7 +715,7 @@ class TxDevice:
 
             payload = json_string.encode('utf-8')
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_SET_SWTRIG, data=payload)
+            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_SET_SWTRIG, addr=0, data=payload)
             self.uart.clear_buffer()
 
             if r.packet_type != OW_ERROR and r.data_len > 0:
@@ -597,7 +754,7 @@ class TxDevice:
             if not self.uart.is_connected():
                 raise ValueError("TX Device not connected")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_GET_SWTRIG, data=None)
+            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_GET_SWTRIG, addr=0, data=None)
             self.uart.clear_buffer()
             data_object = None
             try:
@@ -664,7 +821,7 @@ class TxDevice:
             if not self.uart.is_connected():
                 raise ValueError("TX Device not connected")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_START_SWTRIG, data=None)
+            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CTRL_START_SWTRIG, addr=0, data=None)
             self.uart.clear_buffer()
             # r.print_packet()
             if r.packet_type == OW_ERROR:
@@ -707,6 +864,7 @@ class TxDevice:
                 id=None,
                 packetType=OW_CONTROLLER,
                 command=OW_CTRL_STOP_SWTRIG,
+                addr=0,
                 data=None
             )
 
@@ -730,7 +888,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def soft_reset(self, module:int=1) -> bool:
+    def soft_reset(self, module:int=0) -> bool:
         """
         Perform a soft reset on the TX device.
 
@@ -759,7 +917,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def enter_dfu(self, module:int=1) -> bool:
+    def enter_dfu(self, module:int=0) -> bool:
         """
         Perform a soft reset to enter DFU mode on TX device.
 
@@ -779,7 +937,9 @@ class TxDevice:
 
             r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_DFU, addr=module)
             self.uart.clear_buffer()
-            # r.print_packet()
+            if r is None:
+                # Device disconnected immediately after reset — expected for DFU entry
+                return True
             if r.packet_type == OW_ERROR:
                 logger.error("Error setting DFU mode for device")
                 return False
@@ -822,7 +982,7 @@ class TxDevice:
             else:
                 payload = None
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_ASYNC, data=payload)
+            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_ASYNC, addr=0, data=payload)
             self.uart.clear_buffer()
             # r.print_packet()
             if r.packet_type == OW_ERROR:
@@ -855,13 +1015,13 @@ class TxDevice:
                 if not self.uart.is_connected():
                     raise ValueError("TX Device not connected")
 
-                r = self.uart.send_packet(id=None, packetType=OW_TX7332, command=OW_TX7332_DEVICE_COUNT)
+                r = self.uart.send_packet(id=None, packetType=OW_TX7332, command=OW_TX7332_DEVICE_COUNT, addr=0)
                 self.uart.clear_buffer()
                 # r.print_packet()
                 if r.packet_type != OW_ERROR and r.data_len == 1:
                     tx_module_count = r.data[0]
                 else:
-                    logger.info("Error retrieving TX module count.")
+                    logger.error("Error retrieving TX module count.")
             logger.info("TX Module Count: %d", tx_module_count)
             return tx_module_count
         except ValueError as v:
@@ -903,7 +1063,7 @@ class TxDevice:
                 if r.packet_type != OW_ERROR and r.reserved > 0:
                     num_detected_devices = r.reserved
                 else:
-                    logger.info("Error enumerating TX devices.")
+                    logger.error("Error enumerating TX devices.")
                 if num_devices is not None and num_detected_devices != num_devices:
                     raise ValueError(f"Expected {num_devices} devices, but detected {num_detected_devices} devices")
             self.tx_registers = TxDeviceRegisters(num_transmitters=num_detected_devices, module_invert=self.module_invert)
@@ -1012,7 +1172,7 @@ class TxDevice:
                 logger.error("Error writing TX register value")
                 return False
 
-            logger.info(f"Successfully wrote value 0x{value:08X} to register 0x{address:04X}")
+            logger.debug(f"Successfully wrote value 0x{value:08X} to register 0x{address:04X}")
             return True
 
         except ValueError as v:
@@ -1083,7 +1243,7 @@ class TxDevice:
                 logger.error(f"Unexpected data length: {r.data_len}")
                 return 0
 
-            logger.info(f"Successfully read value 0x{value:08X} from register 0x{address:04X}")
+            logger.debug(f"Successfully read value 0x{value:08X} from register 0x{address:04X}")
             return value
         except ValueError as v:
             logger.error("ValueError: %s", v)
@@ -1173,6 +1333,68 @@ class TxDevice:
             raise  # Re-raise the exception for the caller to handleected error in write_block: {e}")
             return False
 
+    def read_block(self, identifier: int, start_address: int, count: int) -> Optional[List[int]]:
+        """
+        Read a block of consecutive register values from the TX device.
+
+        Args:
+            identifier (int): TX chip index.
+            start_address (int): The starting register address to read from.
+            count (int): Number of registers to read.
+
+        Returns:
+            List[int]: List of register values, or None on error.
+
+        Raises:
+            ValueError: If the device is not connected or parameters are invalid.
+            Exception: If an unexpected error occurs.
+        """
+        try:
+            if self.uart.demo_mode:
+                return [0] * count
+
+            if not self.uart.is_connected():
+                raise ValueError("TX Device not connected")
+
+            if identifier < 0:
+                raise ValueError("TX Chip address NOT SET")
+
+            if count <= 0 or count > 62:
+                raise ValueError(f"count must be 1-62, got {count}")
+
+            # Request payload: uint16_t start_addr, uint8_t count, uint8_t reserved
+            data = struct.pack('<HBB', start_address, count, 0)
+
+            r = self.uart.send_packet(
+                id=None,
+                packetType=OW_TX7332,
+                command=OW_TX7332_RBLOCK,
+                addr=identifier,
+                data=data
+            )
+            self.uart.clear_buffer()
+
+            if r.packet_type == OW_ERROR:
+                logger.error("Error reading TX register block")
+                return None
+
+            expected_len = count * 4
+            if r.data_len != expected_len:
+                logger.error(f"Unexpected data length: {r.data_len}, expected {expected_len}")
+                return None
+
+            values = list(struct.unpack(f'<{count}I', r.data))
+            logger.debug(f"read_block: {count} regs from 0x{start_address:04X} on tx {identifier}")
+            return values
+
+        except ValueError as v:
+            logger.error("ValueError: %s", v)
+            raise
+
+        except Exception as e:
+            logger.error("Unexpected error during process: %s", e)
+            raise
+
     def write_register_verify(self, address: int, value: int) -> bool:
         """
         Write a value to a register in the TX device with verification.
@@ -1224,7 +1446,7 @@ class TxDevice:
                 logger.error("Error verifying writing TX register value")
                 return False
 
-            logger.info(f"Successfully wrote value 0x{value:08X} to register 0x{address:04X}")
+            logger.debug(f"Successfully wrote value 0x{value:08X} to register 0x{address:04X}")
             return True
 
         except ValueError as v:
@@ -1270,7 +1492,7 @@ class TxDevice:
             # Configure chunking for large blocks
             max_regs_per_block = 62  # Maximum registers per block due to payload size
             num_chunks = (len(reg_values) + max_regs_per_block - 1) // max_regs_per_block
-            logger.info(f"Write Block: Total chunks = {num_chunks}")
+            logger.debug(f"Write Block: Total chunks = {num_chunks}")
 
             # Write each chunk
             for i in range(num_chunks):
@@ -1435,7 +1657,7 @@ class TxDevice:
 
             # Write each register to the TX device
             for group, addr, value in parsed_registers:
-                logger.info(f"Writing to {group:<20} | Address: 0x{addr:02X} | Value: 0x{value:08X}")
+                logger.debug(f"Writing to {group:<20} | Address: 0x{addr:02X} | Value: 0x{value:08X}")
                 if not self.write_register(identifier=txchip_id, address=addr, value=value):
                     logger.error(
                         f"Failed to write to TX CHIP ID: {txchip_id} | "
@@ -1443,7 +1665,7 @@ class TxDevice:
                     )
                     return False
 
-            logger.info("Successfully wrote all registers to the TX device.")
+            logger.debug("Successfully wrote all registers to the TX device.")
             return True
 
         except FileNotFoundError as e:
@@ -1455,6 +1677,94 @@ class TxDevice:
         except Exception as e:
             logger.error(f"Unexpected error while writing TI config to TX Device: {e}")
             raise
+
+    # ------------------------------------------------------------------
+    # Firmware update (delegates to LIFUDFU.LIFUDFUManager)
+    # ------------------------------------------------------------------
+
+    def get_module_count(self) -> int:
+        """Return the number of connected LIFU transmitter modules (including master).
+
+        Sends ``OW_CMD_GET_MODULE_COUNT`` (0x10) to the firmware. Falls back to
+        deriving the count from the TX7332 chip count when the firmware does not
+        yet support the command.
+        """
+        try:
+            if self.uart.demo_mode:
+                return 1
+
+            if not self.uart.is_connected():
+                logger.error("TX Device not connected")
+                return 0
+
+            r = self.uart.send_packet(
+                id=None, packetType=OW_CMD,
+                command=OW_CMD_GET_MODULE_COUNT, addr=0
+            )
+            self.uart.clear_buffer()
+
+            if r.packet_type != OW_ERROR and r.data_len >= 1:
+                count = r.data[0]
+                logger.info("Module count from firmware: %d", count)
+                return count
+
+            # Fallback: TX7332 chip count / 2
+            logger.info(
+                "OW_CMD_GET_MODULE_COUNT not supported; falling back to TX7332 count"
+            )
+            module_count = self.get_tx_module_count()
+            return module_count
+
+        except (OSError, RuntimeError) as e:
+            logger.exception("Error getting module count")
+            return 0
+
+    def update_firmware(self, module: int, package_file: str,
+                        vid: int = 0x0483, pid: int = 0xDF11,
+                        libusb_dll: str | None = None,
+                        i2c_addr: int = 0x72,
+                        dfu_wait_s: float = 5.0,
+                        progress_callback=None) -> bool:
+        """Update firmware on a single module.
+
+        Module 0 (USB master): host → USB DFU.
+        Module 1+ (I2C slaves): host → UART OW → master → I2C 0x72 (DFU bootloader).
+
+        Args:
+            module:            Module index (0 = USB master).
+            package_file:      Path to the signed firmware package file.
+            vid:               USB VID for module 0 DFU (default 0x0483).
+            pid:               USB PID for module 0 DFU (default 0xDF11).
+            libusb_dll:        Optional path to libusb-1.0.dll (Windows).
+            i2c_addr:          I2C address of the slave DFU bootloader (default 0x72).
+            dfu_wait_s:        Seconds to wait after DFU-enter for bootloader to boot.
+            progress_callback: Optional ``(written, total, label)`` callable.
+
+        Returns:
+            bool: True on success.
+
+        Raises:
+            ValueError:    If the UART is not connected.
+            RuntimeError:  If DFU entry cannot be verified or programming fails.
+        """
+        from openlifu.io.LIFUDFU import LIFUDFUManager  # lazy import
+
+        if not self.uart.is_connected():
+            raise ValueError("TX Device not connected")
+
+        mgr = LIFUDFUManager(uart=self.uart)
+        mgr.update_module(
+            module=module,
+            package_file=package_file,
+            enter_dfu_fn=self.enter_dfu,
+            vid=vid,
+            pid=pid,
+            libusb_dll=libusb_dll,
+            i2c_addr=i2c_addr,
+            dfu_wait_s=dfu_wait_s,
+            progress_callback=progress_callback,
+        )
+        return True
 
     @property
     def print(self) -> None:
