@@ -438,10 +438,14 @@ Storage Layout
    │   └── {subject_id}/
    │       ├── volumes/
    │       └── sessions/
-   │           ├── runs/
-   │           ├── solutions/
-   │           ├── photoscans/
-   │           └── photocollections/
+   │           └── {session_id}/
+   │               ├── runs/
+   │               │   └── {run_id}/
+   │               ├── solutions/
+   │               │   └── {solution_id}/
+   │               ├── photoscans/
+   │               │   └── {photoscan_id}/
+   │               └── photocollections/
    ├── protocols/
    ├── transducers/
    ├── systems/
