@@ -170,8 +170,8 @@
     <text x="316" y="558" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~185 lines</text>
   </g>
 
-  <!-- Arrow bf -> Protocol -->
-  <path d="M290 358L290 346L160 346L160 336" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#aBlu)"/>
+  <!-- Arrow bf -> Protocol (left third of card) -->
+  <path d="M290 358L290 324L160 324L160 316" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#aBlu)"/>
 
   <!-- SIMULATION -->
   <rect x="560" y="358" width="440" height="238" rx="14" fill="url(#zGreen)" stroke="#10b981" stroke-width="2" stroke-dasharray="8 4"/>
@@ -203,8 +203,8 @@
     <text x="590" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Methods: UniformWater | UniformTissue | Custom.  Skin: skinseg.py (481 lines)</text>
   </g>
 
-  <!-- Arrow sim -> Protocol -->
-  <path d="M780 358L780 346L460 346L460 336" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#aGrn)"/>
+  <!-- Arrow sim -> Protocol (center of card) -->
+  <path d="M780 358L780 330L215 330L215 316" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#aGrn)"/>
 
   <!-- TRANSDUCER -->
   <rect x="1020" y="358" width="440" height="238" rx="14" fill="url(#zRed)" stroke="#ef4444" stroke-width="2" stroke-dasharray="8 4"/>
@@ -236,8 +236,8 @@
     <text x="1050" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">get_concave_cylinder(): factory for curved arrays. (141 lines)</text>
   </g>
 
-  <!-- Arrow xdc -> Protocol -->
-  <path d="M1240 358L1240 346L700 346L700 336" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#aRed)"/>
+  <!-- Arrow xdc -> Protocol (right third of card) -->
+  <path d="M1240 358L1240 336L310 336L310 316" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#aRed)"/>
 
   <!-- ================================================================ -->
   <!-- ROW 3: HARDWARE + DATA/NAV/CLOUD y=618..880 -->

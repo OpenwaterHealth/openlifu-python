@@ -6,6 +6,14 @@ library, a toolbox for planning and controlling focused ultrasound treatments.
 It covers the module structure, core data flow, class hierarchies, and
 integration points between subsystems.
 
+.. figure:: openlifu_architecture.svg
+   :alt: OpenLIFU architecture diagram showing module structure and data flow
+   :width: 100%
+
+   High-level architecture diagram of the OpenLIFU library, showing the 10
+   modules, their approximate sizes, data flow between components, and the
+   end-to-end treatment planning pipeline.
+
 .. contents:: Table of Contents
    :depth: 3
    :local:
