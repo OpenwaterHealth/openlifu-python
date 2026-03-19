@@ -126,19 +126,17 @@ Version control of database using DVC (Data Version Control)
 
 Data Version Control (DVC) is a data management tool that is meant to be run alongside Git.
 In this project, DVC is used to link changes in the code to specific versions of a sample database containing example project files.
-DVC can be used when this project is installed in Dev mode. You can read more about DVC and how to use it `here <https://dvc.org/doc/start>`_.
-**Note:** Remote access to the sample database stored on google drive is currently restricted. Access requires a :code:`gdrive_client_secret`
-for user access authentication to be shared by developers.
+DVC can be used only when this project is installed in Dev mode. Otherwise, it is recommended to use the database that is provided to you. You can read more about DVC and how to use it `here <https://dvc.org/doc/start>`_.
 
 DVC usage
 ~~~~~~~~~
 
-To download the sample database:
+To download the sample database in Dev mode:
 
 .. code:: sh
 
    git pull
-   dvc remote modify --local shared_gdrive gdrive_client_secret <client_secret_here> # Contact developers for grive_client_secret
+   dvc remote modify --local shared_gdrive gdrive_client_secret <client_secret_here> # Contact developers for gdrive_client_secret
    dvc pull # Requires access to remote storage
 
 This will download a directory 'db_dvc' in the repo directory that
