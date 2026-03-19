@@ -10,9 +10,9 @@ integration points between subsystems.
    :alt: OpenLIFU architecture diagram showing module structure and data flow
    :width: 100%
 
-   High-level architecture diagram of the OpenLIFU library, showing the 10
-   modules, their approximate sizes, data flow between components, and the
-   end-to-end treatment planning pipeline.
+   High-level architecture diagram of the OpenLIFU library, showing module
+   structure, data flow between components, and the end-to-end treatment
+   planning pipeline.
 
 .. contents:: Table of Contents
    :depth: 3
@@ -39,7 +39,7 @@ The library is organized into 10 top-level modules under ``src/openlifu/``:
    ├── geo.py       Geometry primitives (Point, ArrayTransform, coordinate math)
    └── virtual_fit.py  Transducer placement optimization
 
-The total codebase is approximately 16,000 lines of Python across 70+ files.
+The library is organized into 70+ Python files.
 
 
 End-to-End Treatment Workflow
@@ -76,17 +76,15 @@ The beamforming module defines the acoustic parameters of a treatment:
 what pulses to send, in what sequence, where to focus, and how to
 calculate per-element delays and weights.
 
-**Line count:** ~700 lines across 15 files.
-
 Pulse and Sequence
 ~~~~~~~~~~~~~~~~~~
 
-``Pulse`` (63 lines) defines a sinusoidal burst:
+``Pulse`` defines a sinusoidal burst:
 
 - ``frequency`` (Hz), ``amplitude`` (0-1), ``duration`` (seconds)
 - ``calc_pulse(t)`` returns ``amplitude * sin(2*pi*frequency*t)``
 
-``Sequence`` (74 lines) defines pulse timing:
+``Sequence`` defines pulse timing:
 
 - ``pulse_interval``, ``pulse_count`` (within a train)
 - ``pulse_train_interval``, ``pulse_train_count`` (between trains)
@@ -129,8 +127,9 @@ Abstract base class ``ApodizationMethod`` with three implementations:
 - ``PiecewiseLinear``: Linear rolloff between ``rolloff_angle`` (weight=1)
   and ``zero_angle`` (weight=0).
 
-All apodization methods use ``element.angle_to_point()`` to compute the
-angle between each element's normal vector and the direction to the target.
+``MaxAngle`` and ``PiecewiseLinear`` use ``element.angle_to_point()``
+to compute the angle between each element's normal vector and the direction
+to the target. ``Uniform`` ignores element geometry entirely.
 
 
 Treatment Planning Module (``plan/``)
@@ -139,12 +138,10 @@ Treatment Planning Module (``plan/``)
 The planning module orchestrates beamforming, simulation, and analysis
 into a complete treatment solution.
 
-**Line count:** ~1,750 lines across 7 files.
-
 Protocol
 ~~~~~~~~
 
-``Protocol`` (398 lines) is the central configuration object. It composes:
+``Protocol`` is the central configuration object. It composes:
 
 - A ``Pulse`` and ``Sequence`` (what to send)
 - A ``FocalPattern`` (where to focus)
@@ -179,7 +176,7 @@ The key method is ``calc_solution()``:
 Solution
 ~~~~~~~~
 
-``Solution`` (533 lines) stores the computed sonication plan:
+``Solution`` stores the computed sonication plan:
 
 - ``delays``: shape ``(num_foci, num_elements)`` in seconds
 - ``apodizations``: shape ``(num_foci, num_elements)`` in [0, 1]
@@ -200,7 +197,7 @@ peak pressure matches ``FocalPattern.target_pressure``.
 Solution Analysis
 ~~~~~~~~~~~~~~~~~
 
-``SolutionAnalysis`` (574 lines) contains per-focus lists of metrics and
+``SolutionAnalysis`` contains per-focus lists of metrics and
 global aggregate values. Key fields:
 
 - ``mainlobe_pnp_MPa``, ``mainlobe_isppa_Wcm2``, ``mainlobe_ispta_mWcm2``
@@ -219,14 +216,13 @@ Transducer Module (``xdc/``)
 
 Models the physical geometry of ultrasound transducer arrays.
 
-**Line count:** ~980 lines across 5 files.
-
 Element
 ~~~~~~~
 
-``Element`` (293 lines) represents a single rectangular transducer element:
+``Element`` represents a single rectangular transducer element:
 
-- ``position`` (3D), ``orientation`` (Euler ZYX), ``size`` (width x length)
+- ``position`` (3D), ``orientation`` (3-vector: ``[az, el, roll]`` around
+  ``[y, x', z'']`` axes, in radians), ``size`` (width x length)
 - ``pin`` (hardware channel mapping), ``index`` (logical index)
 - ``sensitivity`` (Pa/V), ``impulse_response`` (FIR filter)
 
@@ -237,7 +233,7 @@ Key methods: ``distance_to_point()``, ``angle_to_point()``,
 Transducer
 ~~~~~~~~~~
 
-``Transducer`` (496 lines) is a collection of ``Element`` objects:
+``Transducer`` is a collection of ``Element`` objects:
 
 - ``elements``: list of Element instances
 - ``frequency``: nominal frequency (default 400.6 kHz)
@@ -251,7 +247,7 @@ apodization), ``gen_matrix_array()`` (factory for rectangular arrays),
 TransducerArray
 ~~~~~~~~~~~~~~~
 
-``TransducerArray`` (141 lines) holds multiple ``TransformedTransducer``
+``TransducerArray`` holds multiple ``TransformedTransducer``
 modules with lazy transform application. ``to_transducer()`` merges all
 modules into a single flat ``Transducer``. ``get_concave_cylinder()`` is
 a factory for creating cylindrically curved arrays with a specified
@@ -264,12 +260,10 @@ Simulation Module (``sim/``)
 Integrates with the k-Wave acoustic simulation library for full-wave
 pressure field computation.
 
-**Line count:** ~390 lines across 3 files.
-
 SimSetup
 ~~~~~~~~
 
-``SimSetup`` (230 lines) configures the simulation domain:
+``SimSetup`` configures the simulation domain:
 
 - ``spacing`` (default 1.0 mm), ``units`` (default "mm")
 - ``x_extent``, ``y_extent``, ``z_extent`` (domain bounds)
@@ -284,16 +278,15 @@ reference material properties if no volume is provided).
 k-Wave Interface
 ~~~~~~~~~~~~~~~~
 
-``kwave_if.py`` (146 lines) wraps the ``k-wave-python`` library:
+``kwave_if.py`` wraps the ``k-wave-python`` library:
 
 1. ``get_kgrid()``: Creates simulation grid from coordinates
 2. ``get_karray()``: Builds k-Wave source array from Transducer elements
 3. ``get_medium()``: Maps segmented tissue properties to k-Wave format
 4. ``get_sensor()``: Full-domain pressure sensor
 5. ``get_source()``: Distributes beamformed signal across array
-6. ``run_simulation()``: Executes ``kspaceFirstOrder3DG`` (GPU) or
-   ``kspaceFirstOrder3DC`` (CPU), returns ``xarray.Dataset`` with
-   ``p_max``, ``p_min``, and ``intensity`` fields
+6. ``run_simulation()``: Executes ``kspaceFirstOrder3D``, returns
+   ``xarray.Dataset`` with ``p_max``, ``p_min``, and ``intensity`` fields
 
 Intensity is computed as ``I = 10^-4 * p_min^2 / (2 * Z)`` where
 ``Z = density * sound_speed`` is the acoustic impedance.
@@ -303,8 +296,6 @@ Segmentation Module (``seg/``)
 ------------------------------
 
 Maps tissue types to acoustic material properties for simulation.
-
-**Line count:** ~830 lines across 6 files.
 
 Materials
 ~~~~~~~~~
@@ -339,7 +330,7 @@ entire domain with a single material).
 Skin Segmentation
 ~~~~~~~~~~~~~~~~~
 
-``skinseg.py`` (481 lines) extracts the skin surface from MRI for
+``skinseg.py`` extracts the skin surface from MRI for
 virtual fitting:
 
 1. ``compute_foreground_mask()``: Otsu thresholding with morphological
@@ -356,12 +347,10 @@ Hardware Interface Module (``io/``)
 
 Communicates with the physical LIFU transducer hardware over serial UART.
 
-**Line count:** ~4,500 lines across 7 files. This is the largest module.
-
 UART Protocol
 ~~~~~~~~~~~~~
 
-``LIFUUart`` (532 lines) implements packet-based serial communication at
+``LIFUUart`` implements packet-based serial communication at
 921,600 baud with CRC16-CCITT checksums.
 
 Packet format:
@@ -377,7 +366,7 @@ Packet types include ``OW_CMD`` (command), ``OW_RESP`` (response),
 TX7332 Device Driver
 ~~~~~~~~~~~~~~~~~~~~
 
-``LIFUTXDevice`` (2,196 lines) controls TI TX7332 ultrasound beamformer ICs.
+``LIFUTXDevice`` controls TI TX7332 ultrasound beamformer ICs.
 Each chip drives 32 channels. A typical system has 2-4 chips for 64-128
 elements.
 
@@ -401,7 +390,7 @@ writes:
 HV Controller
 ~~~~~~~~~~~~~
 
-``LIFUHVController`` (1,162 lines) manages the high-voltage power supply:
+``LIFUHVController`` manages the high-voltage power supply:
 
 - Voltage control (5-100V range)
 - Enable/disable HV and 12V outputs
@@ -412,7 +401,7 @@ HV Controller
 LIFUInterface
 ~~~~~~~~~~~~~
 
-``LIFUInterface`` (481 lines) is the top-level hardware abstraction:
+``LIFUInterface`` is the top-level hardware abstraction:
 
 .. code-block:: text
 
@@ -438,8 +427,6 @@ Database Module (``db/``)
 -------------------------
 
 File-based hierarchical persistence for all treatment data.
-
-**Line count:** ~1,650 lines across 5 files.
 
 Storage Layout
 ~~~~~~~~~~~~~~
@@ -484,8 +471,6 @@ Navigation Module (``nav/``)
 
 Photogrammetric 3D reconstruction for transducer localization.
 
-**Line count:** ~910 lines in 1 file plus pipeline configs.
-
 The ``run_reconstruction()`` function orchestrates a 10-step Meshroom
 pipeline:
 
@@ -514,8 +499,6 @@ Virtual Fitting (``virtual_fit.py``)
 
 Optimizes transducer placement on the patient's head to reach a target.
 
-**Line count:** 467 lines.
-
 Algorithm
 ~~~~~~~~~
 
@@ -543,8 +526,6 @@ Cloud Module (``cloud/``)
 
 Bidirectional sync between local database and cloud API.
 
-**Line count:** ~2,455 lines across 35 files.
-
 Architecture
 ~~~~~~~~~~~~
 
@@ -569,8 +550,6 @@ newer, download from cloud; if local is newer, upload to cloud.
 
 Geometry Primitives (``geo.py``)
 --------------------------------
-
-**Line count:** 273 lines.
 
 Point
 ~~~~~
@@ -598,20 +577,18 @@ Coordinate Utilities
 Utilities (``util/``)
 ---------------------
 
-**Line count:** ~750 lines across 9 files.
-
-- ``units.py`` (244 lines): Comprehensive unit conversion supporting SI
+- ``units.py``: Comprehensive unit conversion supporting SI
   prefixes, compound units (``m/s``, ``dB/cm/MHz``), and angle/time types
 - ``json.py``: Custom ``PYFUSEncoder`` for numpy arrays, datetime, and
   domain objects
-- ``volume_conversion.py`` (160 lines): DICOM to NIfTI conversion with
+- ``volume_conversion.py``: DICOM to NIfTI conversion with
   affine extraction from ``ImageOrientationPatient`` and
   ``ImagePositionPatient`` tags
 - ``strings.py``: ID sanitization with snake_case, camelCase, PascalCase
   support
 - ``dict_conversion.py``: ``DictMixin`` base class for ``to_dict()``/
   ``from_dict()`` serialization
-- ``assets.py`` (170 lines): Model download and cache management
+- ``assets.py``: Model download and cache management
 
 
 Design Patterns

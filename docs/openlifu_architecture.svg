@@ -20,7 +20,7 @@
     <marker id="aBlu" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
     <marker id="aRed" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ef4444"/></marker>
     <linearGradient id="zBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.06"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/></linearGradient>
-    <linearGradient id="zPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7c3aed" stop-opacity="0.06"/><stop offset="100%" stop-color="#7c3aed" stop-opacity="0.02"/></linearGradient>
+    <linearGradient id="zPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5f3ff"/><stop offset="100%" stop-color="#ede9fe"/></linearGradient>
     <linearGradient id="zGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity="0.06"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/></linearGradient>
     <linearGradient id="zAmber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f59e0b" stop-opacity="0.06"/><stop offset="100%" stop-color="#f59e0b" stop-opacity="0.02"/></linearGradient>
     <linearGradient id="zRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.06"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0.02"/></linearGradient>
@@ -31,7 +31,7 @@
 
   <!-- Title -->
   <text x="820" y="36" text-anchor="middle" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="700" fill="#0f172a">OpenLIFU Python Library: Technical Architecture</text>
-  <text x="820" y="56" text-anchor="middle" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="12" fill="#64748b">Module structure, data flow, and integration points (~16,000 lines across 100 files)</text>
+  <text x="820" y="56" text-anchor="middle" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="12" fill="#64748b">Module structure, data flow, and integration points</text>
 
   <!-- Legend (left-aligned at x=40) -->
   <g transform="translate(40,68)">
@@ -47,19 +47,21 @@
     <rect x="416" y="8" width="12" height="12" rx="3" fill="url(#zRed)" stroke="#ef4444" stroke-width="1.5"/>
     <text x="434" y="18" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#334155" dominant-baseline="middle">Transducer</text>
     <rect x="516" y="8" width="12" height="12" rx="3" fill="url(#zTeal)" stroke="#0891b2" stroke-width="1.5"/>
-    <text x="534" y="18" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#334155" dominant-baseline="middle">Data / Navigation</text>
-    <line x1="660" y1="4" x2="660" y2="30" stroke="#e2e8f0"/>
-    <line x1="678" y1="17" x2="706" y2="17" stroke="#64748b" stroke-width="2" marker-end="url(#aR)"/>
-    <text x="714" y="18" font-family="Inter, sans-serif" font-size="9.5" fill="#475569" dominant-baseline="middle">Data flow</text>
-    <line x1="790" y1="17" x2="818" y2="17" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#aR)"/>
-    <text x="826" y="18" font-family="Inter, sans-serif" font-size="9.5" fill="#475569" dominant-baseline="middle">Uses / depends on</text>
+    <text x="534" y="18" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#334155" dominant-baseline="middle">Data &amp; Cloud</text>
+    <rect x="626" y="8" width="12" height="12" rx="3" fill="url(#zPurple)" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="644" y="18" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#334155" dominant-baseline="middle">Navigation</text>
+    <line x1="770" y1="4" x2="770" y2="30" stroke="#e2e8f0"/>
+    <line x1="788" y1="17" x2="816" y2="17" stroke="#64748b" stroke-width="2" marker-end="url(#aR)"/>
+    <text x="824" y="18" font-family="Inter, sans-serif" font-size="9.5" fill="#475569" dominant-baseline="middle">Data flow</text>
+    <line x1="900" y1="17" x2="928" y2="17" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#aR)"/>
+    <text x="936" y="18" font-family="Inter, sans-serif" font-size="9.5" fill="#475569" dominant-baseline="middle">Uses / depends on</text>
   </g>
 
   <!-- ================================================================ -->
   <!-- ROW 1: TREATMENT PLANNING (left-aligned at x=40) y=118..330 -->
   <!-- ================================================================ -->
   <rect x="40" y="118" width="1560" height="218" rx="14" fill="url(#zPurple)" stroke="#7c3aed" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="60" y="140" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#7c3aed" letter-spacing="0.06em">TREATMENT PLANNING (plan/) ~1,777 lines</text>
+  <text x="60" y="140" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#7c3aed" letter-spacing="0.06em">TREATMENT PLANNING (plan/)</text>
 
   <!-- Protocol card (glowing) -->
   <g filter="url(#glow)">
@@ -72,7 +74,7 @@
     <text x="78" y="236" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">SimSetup, SegmentationMethod</text>
     <text x="78" y="252" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">ParamConstraints, TargetConstraints</text>
     <text x="78" y="280" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#5b21b6">Key: calc_solution(target, transducer)</text>
-    <text x="78" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">protocol.py (398 lines)</text>
+    <text x="78" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">protocol.py</text>
   </g>
 
   <!-- Arrow Protocol -> Solution -->
@@ -89,7 +91,7 @@
     <text x="446" y="236" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">pulse, sequence, voltage, foci</text>
     <text x="446" y="252" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">simulation_result: xarray.Dataset</text>
     <text x="446" y="280" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#5b21b6">Key: analyze(), scale()</text>
-    <text x="446" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">solution.py (533 lines)</text>
+    <text x="446" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">solution.py</text>
   </g>
 
   <!-- Arrow Solution -> Analysis -->
@@ -106,7 +108,7 @@
     <text x="784" y="236" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">MI, TIC, power, duty cycles</text>
     <text x="784" y="252" font-family="Inter, sans-serif" font-size="10.5" fill="#334155">Sidelobe ratios, focal centroid</text>
     <text x="784" y="280" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#5b21b6">ParameterConstraint evaluation</text>
-    <text x="784" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">solution_analysis.py (574 lines)</text>
+    <text x="784" y="300" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">solution_analysis.py</text>
   </g>
 
   <!-- Safety Constraints card -->
@@ -116,7 +118,7 @@
     <text x="1098" y="212" font-family="Inter, sans-serif" font-size="10" fill="#334155">ParameterConstraint (MI, ISPTA...)</text>
     <text x="1098" y="228" font-family="Inter, sans-serif" font-size="10" fill="#334155">TargetConstraints (x, y, z bounds)</text>
     <text x="1098" y="244" font-family="Inter, sans-serif" font-size="10" fill="#334155">Operators: &lt;, &lt;=, within, inside</text>
-    <text x="1098" y="260" font-family="Inter, sans-serif" font-size="9.5" fill="#64748b">~166 lines</text>
+
   </g>
   <line x1="1046" y1="218" x2="1078" y2="218" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#aPur)"/>
 
@@ -128,14 +130,13 @@
 
   <!-- BEAMFORMING -->
   <rect x="40" y="358" width="500" height="238" rx="14" fill="url(#zBlue)" stroke="#2563eb" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="60" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="0.06em">BEAMFORMING (bf/) ~677 lines</text>
+  <text x="60" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="0.06em">BEAMFORMING (bf/)</text>
 
   <g filter="url(#sh)">
     <rect x="56" y="396" width="144" height="78" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
     <rect x="56" y="396" width="144" height="22" rx="8" fill="#2563eb"/><rect x="56" y="412" width="144" height="6" fill="#2563eb"/>
     <text x="128" y="412" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Pulse</text>
     <text x="70" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">frequency, amplitude, duration</text>
-    <text x="70" y="464" font-family="Inter, sans-serif" font-size="9" fill="#64748b">63 lines</text>
   </g>
   <g filter="url(#sh)">
     <rect x="216" y="396" width="144" height="78" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
@@ -143,7 +144,6 @@
     <text x="288" y="412" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Sequence</text>
     <text x="230" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">pulse_interval, pulse_count</text>
     <text x="230" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">train_interval, train_count</text>
-    <text x="230" y="464" font-family="Inter, sans-serif" font-size="9" fill="#64748b">74 lines</text>
   </g>
   <g filter="url(#sh)">
     <rect x="376" y="396" width="144" height="78" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
@@ -151,7 +151,7 @@
     <text x="448" y="412" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">FocalPattern</text>
     <text x="390" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">SinglePoint | Wheel</text>
     <text x="390" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">target_pressure (Pa)</text>
-    <text x="390" y="464" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~227 lines</text>
+
   </g>
   <g filter="url(#sh)">
     <rect x="56" y="490" width="230" height="78" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
@@ -159,7 +159,7 @@
     <text x="171" y="506" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">DelayMethod</text>
     <text x="70" y="530" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Direct: tof = distance / c</text>
     <text x="70" y="544" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Returns: max(tof) - tof per element</text>
-    <text x="70" y="558" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~98 lines</text>
+
   </g>
   <g filter="url(#sh)">
     <rect x="302" y="490" width="218" height="78" rx="8" fill="#fff" stroke="#2563eb" stroke-width="1.5"/>
@@ -167,7 +167,7 @@
     <text x="411" y="506" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">ApodizationMethod</text>
     <text x="316" y="530" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Uniform | MaxAngle | PiecewiseLinear</text>
     <text x="316" y="544" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Returns: weights [0..1] per element</text>
-    <text x="316" y="558" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~185 lines</text>
+
   </g>
 
   <!-- Arrow bf -> Protocol (left third of card) -->
@@ -175,7 +175,7 @@
 
   <!-- SIMULATION -->
   <rect x="560" y="358" width="440" height="238" rx="14" fill="url(#zGreen)" stroke="#10b981" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="580" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#10b981" letter-spacing="0.06em">SIMULATION (sim/) ~387 lines</text>
+  <text x="580" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#10b981" letter-spacing="0.06em">SIMULATION (sim/)</text>
 
   <g filter="url(#sh)">
     <rect x="576" y="396" width="196" height="96" rx="8" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
@@ -184,7 +184,7 @@
     <text x="590" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">spacing (1mm), x/y/z extents</text>
     <text x="590" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">dt, t_end, CFL (0.5)</text>
     <text x="590" y="464" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">c0 = 1500 m/s</text>
-    <text x="590" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">sim_setup.py (230 lines)</text>
+    <text x="590" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">sim_setup.py</text>
   </g>
   <g filter="url(#sh)">
     <rect x="788" y="396" width="196" height="96" rx="8" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
@@ -193,14 +193,14 @@
     <text x="802" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">get_kgrid(), get_karray()</text>
     <text x="802" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">get_medium(), get_source()</text>
     <text x="802" y="464" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#065f46">run_simulation() (GPU/CPU)</text>
-    <text x="802" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">kwave_if.py (146 lines)</text>
+    <text x="802" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">kwave_if.py</text>
   </g>
   <g filter="url(#sh)">
     <rect x="576" y="508" width="408" height="68" rx="8" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
     <rect x="576" y="508" width="408" height="22" rx="8" fill="#10b981"/><rect x="576" y="524" width="408" height="6" fill="#10b981"/>
-    <text x="780" y="524" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Segmentation (seg/) ~827 lines</text>
+    <text x="780" y="524" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Segmentation (seg/)</text>
     <text x="590" y="548" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Materials: Water (1500), Tissue (1540), Skull (4080), Air (344), Standoff (1420) m/s</text>
-    <text x="590" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Methods: UniformWater | UniformTissue | Custom.  Skin: skinseg.py (481 lines)</text>
+    <text x="590" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Methods: UniformWater | UniformTissue | Custom.  Skin: skinseg.py</text>
   </g>
 
   <!-- Arrow sim -> Protocol (center of card) -->
@@ -208,7 +208,7 @@
 
   <!-- TRANSDUCER -->
   <rect x="1020" y="358" width="440" height="238" rx="14" fill="url(#zRed)" stroke="#ef4444" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="1040" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#ef4444" letter-spacing="0.06em">TRANSDUCER (xdc/) ~976 lines</text>
+  <text x="1040" y="380" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#ef4444" letter-spacing="0.06em">TRANSDUCER (xdc/)</text>
 
   <g filter="url(#sh)">
     <rect x="1036" y="396" width="200" height="96" rx="8" fill="#fff" stroke="#ef4444" stroke-width="1.5"/>
@@ -217,7 +217,7 @@
     <text x="1050" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">elements: List[Element]</text>
     <text x="1050" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">frequency: 400.6 kHz</text>
     <text x="1050" y="464" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">standoff_transform: 4x4</text>
-    <text x="1050" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">transducer.py (496 lines)</text>
+    <text x="1050" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">transducer.py</text>
   </g>
   <g filter="url(#sh)">
     <rect x="1252" y="396" width="192" height="96" rx="8" fill="#fff" stroke="#ef4444" stroke-width="1.5"/>
@@ -226,14 +226,14 @@
     <text x="1266" y="436" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">position, orientation (3D)</text>
     <text x="1266" y="450" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">pin (HW channel), index</text>
     <text x="1266" y="464" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">sensitivity, impulse_resp</text>
-    <text x="1266" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">element.py (293 lines)</text>
+    <text x="1266" y="482" font-family="Inter, sans-serif" font-size="9" fill="#64748b">element.py</text>
   </g>
   <g filter="url(#sh)">
     <rect x="1036" y="508" width="408" height="68" rx="8" fill="#fff" stroke="#ef4444" stroke-width="1.5"/>
     <rect x="1036" y="508" width="408" height="22" rx="8" fill="#ef4444"/><rect x="1036" y="524" width="408" height="6" fill="#ef4444"/>
     <text x="1240" y="524" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">TransducerArray (modular)</text>
     <text x="1050" y="548" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">modules: List[TransformedTransducer]. to_transducer(): merge into flat array.</text>
-    <text x="1050" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">get_concave_cylinder(): factory for curved arrays. (141 lines)</text>
+    <text x="1050" y="564" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">get_concave_cylinder(): factory for curved arrays.</text>
   </g>
 
   <!-- Arrow xdc -> Protocol (right third of card) -->
@@ -245,7 +245,7 @@
 
   <!-- HARDWARE -->
   <rect x="40" y="618" width="620" height="268" rx="14" fill="url(#zAmber)" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="60" y="640" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#f59e0b" letter-spacing="0.06em">HARDWARE INTERFACE (io/) ~4,505 lines</text>
+  <text x="60" y="640" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#f59e0b" letter-spacing="0.06em">HARDWARE INTERFACE (io/)</text>
 
   <g filter="url(#sh)">
     <rect x="56" y="656" width="240" height="108" rx="8" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
@@ -255,7 +255,6 @@
     <text x="70" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">States: OFF, ON, PROGRAMMING,</text>
     <text x="70" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">READY, NOT_READY, RUNNING, FINISHED</text>
     <text x="70" y="744" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#92400e">set_solution(), start/stop_sonication()</text>
-    <text x="70" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">481 lines</text>
   </g>
   <g filter="url(#sh)">
     <rect x="312" y="656" width="166" height="108" rx="8" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
@@ -265,7 +264,6 @@
     <text x="326" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">16 delay profiles</text>
     <text x="326" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">32 pulse profiles</text>
     <text x="326" y="744" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#92400e">set_solution(), set_trigger()</text>
-    <text x="326" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">2,196 lines</text>
   </g>
   <g filter="url(#sh)">
     <rect x="494" y="656" width="146" height="108" rx="8" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
@@ -274,59 +272,67 @@
     <text x="508" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">5-100V output</text>
     <text x="508" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Temp monitoring</text>
     <text x="508" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Fan, LED control</text>
-    <text x="508" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">1,162 lines</text>
   </g>
   <g filter="url(#sh)">
     <rect x="56" y="780" width="584" height="78" rx="8" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
     <rect x="56" y="780" width="584" height="22" rx="8" fill="#f59e0b"/><rect x="56" y="796" width="584" height="6" fill="#f59e0b"/>
     <text x="348" y="796" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">LIFUUart (Serial Protocol)</text>
     <text x="70" y="822" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">921,600 baud | Packet: [0xAA] [ID:2B] [TYPE] [CMD] [ADDR] [RSV] [LEN:2B] [DATA] [CRC16] [0xDD]</text>
-    <text x="70" y="840" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Types: CMD, RESP, TX7332, POWER, ACK/NAK | CRC16-CCITT | Async mode (532 lines)</text>
+    <text x="70" y="840" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Types: CMD, RESP, TX7332, POWER, ACK/NAK | CRC16-CCITT | Async mode</text>
   </g>
 
   <!-- Arrow Solution -> LIFUInterface -->
   <path d="M568 316L568 340L350 340L350 618L176 618L176 654" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="5 3" marker-end="url(#aR)"/>
 
-  <!-- DATA + NAV + CLOUD -->
-  <rect x="680" y="618" width="920" height="268" rx="14" fill="url(#zTeal)" stroke="#0891b2" stroke-width="2" stroke-dasharray="8 4"/>
-  <text x="700" y="640" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#0891b2" letter-spacing="0.06em">DATA, NAVIGATION, CLOUD ~5,005 lines</text>
+  <!-- DATA & CLOUD -->
+  <rect x="680" y="618" width="500" height="268" rx="14" fill="url(#zTeal)" stroke="#0891b2" stroke-width="2" stroke-dasharray="8 4"/>
+  <text x="700" y="640" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#0891b2" letter-spacing="0.06em">DATA &amp; CLOUD</text>
 
   <g filter="url(#sh)">
-    <rect x="696" y="656" width="224" height="108" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
+    <rect x="696" y="656" width="224" height="96" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
     <rect x="696" y="656" width="224" height="22" rx="8" fill="#0891b2"/><rect x="696" y="672" width="224" height="6" fill="#0891b2"/>
     <text x="808" y="672" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Database (db/)</text>
     <text x="710" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">File-based hierarchical storage</text>
     <text x="710" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Subject -> Session -> Solution</text>
     <text x="710" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Protocols, Transducers, Users</text>
     <text x="710" y="744" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">JSON + NIfTI + HDF5 + 3D mesh</text>
-    <text x="710" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~1,642 lines</text>
   </g>
   <g filter="url(#sh)">
-    <rect x="936" y="656" width="224" height="108" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
-    <rect x="936" y="656" width="224" height="22" rx="8" fill="#0891b2"/><rect x="936" y="672" width="224" height="6" fill="#0891b2"/>
-    <text x="1048" y="672" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Navigation (nav/)</text>
-    <text x="950" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">10-step Meshroom pipeline</text>
-    <text x="950" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">MODNet masking (ONNX)</text>
-    <text x="950" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">UDIM texture atlas merging</text>
-    <text x="950" y="744" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">run_reconstruction()</text>
-    <text x="950" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~908 lines</text>
+    <rect x="936" y="656" width="228" height="96" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
+    <rect x="936" y="656" width="228" height="22" rx="8" fill="#0891b2"/><rect x="936" y="672" width="228" height="6" fill="#0891b2"/>
+    <text x="1050" y="672" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Cloud Sync (cloud/)</text>
+    <text x="950" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">REST API (api.openwater.health)</text>
+    <text x="950" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">WebSocket real-time updates</text>
+    <text x="950" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Filesystem observer (watchdog)</text>
+    <text x="950" y="744" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">11 component types, Bearer auth</text>
   </g>
   <g filter="url(#sh)">
-    <rect x="1176" y="656" width="244" height="108" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
-    <rect x="1176" y="656" width="244" height="22" rx="8" fill="#0891b2"/><rect x="1176" y="672" width="244" height="6" fill="#0891b2"/>
-    <text x="1298" y="672" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Cloud Sync (cloud/)</text>
-    <text x="1190" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">REST API (api.openwater.health)</text>
-    <text x="1190" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">WebSocket real-time updates</text>
-    <text x="1190" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Filesystem observer (watchdog)</text>
-    <text x="1190" y="744" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">11 component types, Bearer auth</text>
-    <text x="1190" y="758" font-family="Inter, sans-serif" font-size="9" fill="#64748b">~2,455 lines</text>
+    <rect x="696" y="768" width="468" height="78" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
+    <rect x="696" y="768" width="468" height="22" rx="8" fill="#0891b2"/><rect x="696" y="784" width="468" height="6" fill="#0891b2"/>
+    <text x="930" y="784" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Geometry (geo.py) + Utilities (util/)</text>
+    <text x="710" y="808" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Point (3D, units, transforms) | ArrayTransform | Spherical/Cartesian coords</text>
+    <text x="710" y="826" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Unit conversion | JSON encoding | DICOM-to-NIfTI | Standoff transforms</text>
+  </g>
+
+  <!-- NAVIGATION & RECONSTRUCTION -->
+  <rect x="1196" y="618" width="404" height="268" rx="14" fill="url(#zPurple)" stroke="#7c3aed" stroke-width="2" stroke-dasharray="8 4"/>
+  <text x="1216" y="640" font-family="Inter, sans-serif" font-size="11" font-weight="700" fill="#7c3aed" letter-spacing="0.06em">NAVIGATION &amp; RECONSTRUCTION</text>
+
+  <g filter="url(#sh)">
+    <rect x="1212" y="656" width="372" height="96" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="1212" y="656" width="372" height="22" rx="8" fill="#7c3aed"/><rect x="1212" y="672" width="372" height="6" fill="#7c3aed"/>
+    <text x="1398" y="672" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Navigation (nav/) + Photogrammetry</text>
+    <text x="1226" y="696" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">10-step Meshroom pipeline</text>
+    <text x="1226" y="710" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">MODNet masking (ONNX) | UDIM texture atlas</text>
+    <text x="1226" y="724" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">run_reconstruction() -> OBJ mesh</text>
+    <text x="1226" y="744" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Photoscan, Photocollection management</text>
   </g>
   <g filter="url(#sh)">
-    <rect x="696" y="780" width="724" height="78" rx="8" fill="#fff" stroke="#0891b2" stroke-width="1.5"/>
-    <rect x="696" y="780" width="724" height="22" rx="8" fill="#0891b2"/><rect x="696" y="796" width="724" height="6" fill="#0891b2"/>
-    <text x="1058" y="796" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Geometry (geo.py) + Virtual Fitting + Utilities</text>
-    <text x="710" y="822" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Point (3D, units, color, transforms) | ArrayTransform (4x4 + units) | Spherical/Cartesian coords | Standoff transforms</text>
-    <text x="710" y="840" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Virtual fit: skin mesh -> search grid -> SVD plane fit -> steering distance -> top-N (467 lines) | Units, JSON, DICOM (~746 lines)</text>
+    <rect x="1212" y="768" width="372" height="78" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="1212" y="768" width="372" height="22" rx="8" fill="#7c3aed"/><rect x="1212" y="784" width="372" height="6" fill="#7c3aed"/>
+    <text x="1398" y="784" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" fill="#fff">Virtual Fitting (virtual_fit.py)</text>
+    <text x="1226" y="808" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Skin mesh -> search grid -> SVD plane fit</text>
+    <text x="1226" y="826" font-family="Inter, sans-serif" font-size="9.5" fill="#334155">Steering distance optimization -> top-N candidates</text>
   </g>
 
   <!-- ================================================================ -->
