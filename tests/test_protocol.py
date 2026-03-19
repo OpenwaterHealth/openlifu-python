@@ -138,7 +138,7 @@ def test_calc_solution_use_gpu(
     )
     run_simulation_mock = mocker.patch(
         "openlifu.plan.solution.run_simulation",
-        return_value = (example_simulation_output, None),
+        return_value = example_simulation_output
     )
     example_protocol.calc_solution(
         target = Point(),

@@ -155,19 +155,22 @@ class Solution:
             apodization = self.apodizations[focidx, :]
             simulation_output_xarray = None
             self.logger.info(f"Simulate for focus {focus}...")
-            simulation_output_xarray, _ = run_simulation(
-                arr=self.transducer,
-                params=params,
-                delays=delays,
-                apod= apodization,
-                freq = self.pulse.frequency,
-                cycles = simulation_cycles,
-                dt=sim_options.dt,
-                t_end=sim_options.t_end,
-                cfl=sim_options.cfl,
-                amplitude = self.pulse.amplitude * self.voltage,
-                gpu = use_gpu
-            )
+            run_simulation_kwargs = {
+                    "arr": self.transducer,
+                    "params": params,
+                    "delays": delays,
+                    "apod": apodization,
+                    "freq": self.pulse.frequency,
+                    "cycles": simulation_cycles,
+                    "dt": sim_options.dt,
+                    "t_end": sim_options.t_end,
+                    "cfl": sim_options.cfl,
+                    "amplitude": self.pulse.amplitude * self.voltage,
+                    "gpu": use_gpu
+                }
+            run_simulation_kwargs.update(sim_options.options)
+            simulation_output_xarray = run_simulation(
+                **run_simulation_kwargs)
             simulation_outputs_to_stack.append(simulation_output_xarray)
         return xa.concat(
             [
