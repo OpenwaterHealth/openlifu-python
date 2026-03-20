@@ -133,8 +133,11 @@ class HVController:
             # r.print_packet()
             if r.data_len == 3:
                 ver = f"v{r.data[0]}.{r.data[1]}.{r.data[2]}"
-            else:
-                ver = "v0.0.0"
+            elif r.data_len and r.data:
+                # Decode only the valid length, strip trailing NULs and whitespace
+                ver_str = r.data[:r.data_len].decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                ver = ver_str if ver_str else 'v0.0.0'
+
             logger.info(ver)
             return ver
 
