@@ -1363,7 +1363,11 @@ class TxDevice:
                 raise ValueError(f"count must be 1-62, got {count}")
 
             # Request payload: uint16_t start_addr, uint8_t count, uint8_t reserved
-            data = struct.pack('<HBB', start_address, count, 0)
+            try:
+                data = struct.pack('<HBB', start_address, count, 0)
+            except struct.error as e:
+                logger.error(f"Error packing read_block request: {e}")
+                raise ValueError("Invalid start_address or count format") from e
 
             r = self.uart.send_packet(
                 id=None,
@@ -1383,7 +1387,12 @@ class TxDevice:
                 logger.error(f"Unexpected data length: {r.data_len}, expected {expected_len}")
                 return None
 
-            values = list(struct.unpack(f'<{count}I', r.data))
+            try:
+                values = list(struct.unpack(f'<{count}I', r.data[:expected_len]))
+            except struct.error as e:
+                logger.error(f"Failed to unpack read_block response ({len(r.data)} bytes): {e}")
+                return None
+
             logger.debug(f"read_block: {count} regs from 0x{start_address:04X} on tx {identifier}")
             return values
 
