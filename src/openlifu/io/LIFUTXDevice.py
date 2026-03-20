@@ -534,12 +534,9 @@ class TxDevice:
             ValueError: If JSON is invalid or UART is not connected
             Exception: If an error occurs during communication
         """
-        try:
-            config = LifuUserConfig()
-            config.set_json_str(json_str)
-            return self.write_config(module=module, config=config)
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON: {e}")
+        config = LifuUserConfig()
+        config.set_json_str(json_str)
+        return self.write_config(module=module, config=config)
 
     def get_temperature(self, module:int=1) -> float:
         """
