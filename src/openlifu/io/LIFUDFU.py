@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import struct
 import time
+import unittest
 from typing import TYPE_CHECKING, Callable
 
 from openlifu.io.LIFUConfig import OW_ERROR, OW_I2C_PASSTHRU
@@ -150,6 +151,134 @@ def parse_signed_package(pkg: bytes) -> dict:
         "fw":           payload[:fw_len],
         "meta":         payload[fw_len:],
     }
+
+
+# ---------------------------------------------------------------------------
+# Internal tests for DFU package parsing / CRC (deterministic, no hardware)
+# ---------------------------------------------------------------------------
+
+def _build_synthetic_signed_package(
+    fw: bytes,
+    meta: bytes,
+    fw_address: int = 0x08000000,
+    meta_address: int = 0x08008000,
+) -> bytes:
+    """Construct a minimal, self-consistent signed DFU package for testing.
+
+    This uses the module's own header layout/CRC implementation so that tests
+    validate :func:`stm32_crc32` and :func:`parse_signed_package` end to end.
+    """
+    hdr_size = struct.calcsize(_PKG_HDR_FULL)
+    payload = fw + meta
+    fw_len = len(fw)
+    meta_len = len(meta)
+
+    payload_crc = stm32_crc32(payload)
+
+    # First pack with a placeholder header CRC so we can compute the real one.
+    header_crc_placeholder = 0
+    header = struct.pack(
+        _PKG_HDR_FULL,
+        _PKG_MAGIC,
+        _PKG_VERSION,
+        hdr_size,
+        fw_address,
+        fw_len,
+        meta_address,
+        meta_len,
+        payload_crc,
+        header_crc_placeholder,
+    )
+
+    header_crc = stm32_crc32(header[:-4])
+    header = struct.pack(
+        _PKG_HDR_FULL,
+        _PKG_MAGIC,
+        _PKG_VERSION,
+        hdr_size,
+        fw_address,
+        fw_len,
+        meta_address,
+        meta_len,
+        payload_crc,
+        header_crc,
+    )
+
+    return header + payload
+
+
+class TestSignedPackage(unittest.TestCase):
+    """Unit tests for :func:`stm32_crc32` and :func:`parse_signed_package`.
+
+    These tests are deterministic and require no hardware; they can be run by
+    any standard Python test runner to guard against regressions that might
+    otherwise risk bricking devices during DFU.
+    """
+
+    def test_parse_signed_package_valid(self) -> None:
+        fw = b"\x01\x02\x03\x04"
+        meta = b"\xAA\xBB"
+        fw_addr = 0x08001000
+        meta_addr = 0x08009000
+
+        pkg = _build_synthetic_signed_package(
+            fw=fw,
+            meta=meta,
+            fw_address=fw_addr,
+            meta_address=meta_addr,
+        )
+
+        parsed = parse_signed_package(pkg)
+
+        assert parsed["fw_address"] == fw_addr
+        assert parsed["meta_address"] == meta_addr
+        assert parsed["fw"] == fw
+        assert parsed["meta"] == meta
+
+    def test_parse_signed_package_header_crc_mismatch(self) -> None:
+        """Corrupt the header so header CRC verification fails."""
+        fw = b"\x10\x20"
+        meta = b"\x30"
+        pkg = _build_synthetic_signed_package(fw=fw, meta=meta)
+
+        # Flip a bit inside the header (but keep magic/version/size plausible).
+        pkg_bytes = bytearray(pkg)
+        if len(pkg_bytes) < 8:
+            self.skipTest("synthetic package unexpectedly small")
+        pkg_bytes[4] ^= 0x01
+        corrupted = bytes(pkg_bytes)
+
+        exc_msg = None
+        try:
+            parse_signed_package(corrupted)
+            raise AssertionError("Expected ValueError was not raised")
+        except ValueError as exc:
+            exc_msg = str(exc)
+        assert exc_msg is not None
+        assert "header CRC mismatch" in exc_msg
+
+    def test_parse_signed_package_payload_crc_mismatch(self) -> None:
+        """Corrupt the payload so payload CRC verification fails."""
+        fw = b"\xDE\xAD\xBE\xEF"
+        meta = b"\x00\x01"
+        pkg = _build_synthetic_signed_package(fw=fw, meta=meta)
+
+        hdr_size = struct.calcsize(_PKG_HDR_FULL)
+        pkg_bytes = bytearray(pkg)
+        # Flip a bit in the first payload byte (after the header).
+        if len(pkg_bytes) <= hdr_size:
+            self.skipTest("synthetic package unexpectedly small")
+        pkg_bytes[hdr_size] ^= 0x01
+        corrupted = bytes(pkg_bytes)
+
+        exc_msg = None
+        try:
+            parse_signed_package(corrupted)
+            raise AssertionError("Expected ValueError was not raised")
+        except ValueError as exc:
+            exc_msg = str(exc)
+        assert exc_msg is not None
+        assert "payload CRC mismatch" in exc_msg
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +543,6 @@ class STM32I2CDFUviaMaster:
                  write_read_delay_s: float = 0.005):
         self._uart = uart
         self._addr = i2c_addr
-        self._wr_delay = write_read_delay_s
 
     # --- low-level transport primitives ---
 
@@ -437,11 +565,14 @@ class STM32I2CDFUviaMaster:
 
     def _exchange(self, payload: bytes, read_len: int,
                   pre_read_delay_s: float | None = None) -> bytes:
-        """Write *payload* to the I2C slave, wait, then read *read_len* bytes back.
+        """Write *payload* to the I2C slave and read *read_len* bytes back.
 
-        The firmware inserts a fixed 5 ms gap between write and read.
-        An optional extra host-side delay can be added via *pre_read_delay_s*
-        (not usually needed).
+        The firmware executes a combined write+read transaction and inserts a
+        fixed 5 ms gap between the write and read phases internally.
+        The optional *pre_read_delay_s* parameter adds an extra host-side delay
+        **before** issuing the passthrough transaction (i.e. before the
+        firmware performs the write+read). This does *not* change the internal
+        5 ms gap handled by the firmware and is rarely needed.
         """
         if pre_read_delay_s and pre_read_delay_s > 0:
             time.sleep(pre_read_delay_s)
@@ -784,16 +915,35 @@ class LIFUDFUManager:
                 "Verifying I2C DFU entry (module %d, addr=0x%02X via master)...",
                 module, i2c_addr,
             )
-            try:
-                bl_version = self.get_bootloader_version_i2c(i2c_addr=i2c_addr)
-            except (RuntimeError, TimeoutError) as e:
+            start_time = time.time()
+            bl_version = None
+            last_error: Exception | None = None
+            while True:
+                elapsed = time.time() - start_time
+                if elapsed >= dfu_enum_timeout_s:
+                    break
+                try:
+                    candidate = self.get_bootloader_version_i2c(i2c_addr=i2c_addr)
+                    if candidate:
+                        bl_version = candidate
+                        break
+                    # Treat empty version string as a failure worth retrying.
+                    last_error = RuntimeError(
+                        "I2C DFU bootloader returned an empty version string"
+                    )
+                except (RuntimeError, TimeoutError) as e:
+                    last_error = e
+                # Small delay before retrying to avoid busy-waiting.
+                time.sleep(0.2)
+            if not bl_version:
+                if last_error is not None:
+                    raise RuntimeError(
+                        f"Module {module} did not enter I2C DFU mode at "
+                        f"0x{i2c_addr:02X} within {dfu_enum_timeout_s}s: {last_error}"
+                    ) from last_error
                 raise RuntimeError(
                     f"Module {module} did not enter I2C DFU mode at "
-                    f"0x{i2c_addr:02X}: {e}"
-                ) from e
-            if not bl_version:
-                raise RuntimeError(
-                    f"Module {module} I2C DFU bootloader returned an empty version string"
+                    f"0x{i2c_addr:02X} within {dfu_enum_timeout_s}s"
                 )
             logger.info("I2C DFU bootloader version: %s", bl_version)
             self.program_i2c(

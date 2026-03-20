@@ -397,7 +397,7 @@ class TxDevice:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def read_config(self, module:int=0) -> Optional[LifuUserConfig]:
+    def read_config(self, module:int=0) -> LifuUserConfig | None:
         """
         Read the user configuration from device flash.
 
@@ -450,7 +450,7 @@ class TxDevice:
             logger.exception("Unexpected error reading config")
             raise
 
-    def write_config(self, config: LifuUserConfig, module:int=0) -> Optional[LifuUserConfig]:
+    def write_config(self, config: LifuUserConfig, module:int=0) -> LifuUserConfig | None:
         """
         Write user configuration to device flash.
 
@@ -517,7 +517,7 @@ class TxDevice:
             logger.exception("Unexpected error writing config")
             raise
 
-    def write_config_json(self, json_str: str, module:int=0) -> Optional[LifuUserConfig]:
+    def write_config_json(self, json_str: str, module:int=0) -> LifuUserConfig | None:
         """
         Write user configuration from a JSON string.
 
@@ -540,6 +540,13 @@ class TxDevice:
             return self.write_config(module=module, config=config)
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON: {e}")
+            raise ValueError(f"Invalid JSON: {e}") from e
+        except ValueError as v:
+            logger.error("ValueError: %s", v)
+            raise
+        except (OSError, RuntimeError, AttributeError) as e:
+            logger.exception("Unexpected error writing config from JSON")
+            raise
 
     def get_temperature(self, module:int=1) -> float:
         """
@@ -935,7 +942,7 @@ class TxDevice:
             if not self.uart.is_connected():
                 raise ValueError("TX Device not connected")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_DFU, addr=module)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_DFU, addr=module)
             self.uart.clear_buffer()
             if r is None:
                 # Device disconnected immediately after reset — expected for DFU entry
@@ -982,7 +989,7 @@ class TxDevice:
             else:
                 payload = None
 
-            r = self.uart.send_packet(id=None, packetType=OW_CONTROLLER, command=OW_CMD_ASYNC, addr=0, data=payload)
+            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_ASYNC, addr=0, data=payload)
             self.uart.clear_buffer()
             # r.print_packet()
             if r.packet_type == OW_ERROR:
@@ -1329,11 +1336,10 @@ class TxDevice:
             raise  # Re-raise the exception for the caller to handle
 
         except Exception as e:
-            logger.error("Unexpected error during process: %s", e)
-            raise  # Re-raise the exception for the caller to handleected error in write_block: {e}")
-            return False
+            logger.error("Unexpected error in write_block: %s", e)
+            raise  # Re-raise the exception for the caller to handle
 
-    def read_block(self, identifier: int, start_address: int, count: int) -> Optional[List[int]]:
+    def read_block(self, identifier: int, start_address: int, count: int) -> List[int] | None:
         """
         Read a block of consecutive register values from the TX device.
 
