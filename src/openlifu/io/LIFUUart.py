@@ -228,7 +228,7 @@ class LIFUUart:
             return
 
         if self.read_thread:
-            self.read_thread.join()
+            self.read_thread.join(timeout=5)
         if self.serial and self.serial.is_open:
             self.serial.close()
             self.serial = None
@@ -367,8 +367,14 @@ class LIFUUart:
                 else:
                     time.sleep(0.05)  # Brief sleep to avoid a busy loop
             except serial.SerialException as e:
+                if "ClearCommError" in str(e):
+                    log.warning("Serial _read_data ClearCommError on %s (ignoring): %s", self.descriptor, e)
+                    time.sleep(0.1)
+                    continue
                 log.error("Serial _read_data error on %s: %s", self.descriptor, e)
                 self.running = False
+                self.signal_disconnect.emit(self.descriptor, self.port)
+                self.port = None
 
     def _tx(self, data: bytes):
         """Send data over UART."""

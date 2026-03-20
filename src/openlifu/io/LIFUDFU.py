@@ -308,18 +308,20 @@ class STM32USBDFU:
             else:
                 break
 
-    def _wait_while_busy(self) -> dict:
+    def _wait_while_busy(self, timeout_s: float = 30.0) -> dict:
         busy = {
             self.STATE_DFU_DNLOAD_SYNC,
             self.STATE_DFU_DNLOAD_BUSY,
             self.STATE_DFU_MANIFEST_SYNC,
             self.STATE_DFU_MANIFEST,
         }
-        while True:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
             st = self.get_status()
             if st["state"] not in busy:
                 return st
             time.sleep(max(st["poll_timeout_ms"] / 1000.0, 0.005))
+        raise TimeoutError(f"USB DFU device stuck in busy state after {timeout_s:.0f} s")
 
     def _dnload(self, block_num: int, payload: bytes) -> dict:
         self._recover_idle()
@@ -328,8 +330,10 @@ class STM32USBDFU:
                 self.DFU_DNLOAD, block_num, bytes(payload) if payload else b""
             )
         except _usb_core.USBError as e:
-            if "timeout" not in str(e).lower():
+            # errno 110 = ETIMEDOUT (libusb); swallow only genuine transfer timeouts
+            if e.errno != 110:
                 raise
+            logger.debug("_dnload timeout on block %d, polling status anyway: %s", block_num, e)
         return self._wait_while_busy()
 
     def _set_address(self, address: int) -> None:
@@ -456,8 +460,14 @@ class STM32I2CDFUviaMaster:
                 f"I2C passthrough exchange failed (addr=0x{self._addr:02X}, "
                 f"want_rx={read_len})"
             )
-        return bytes(r.data[:read_len]) if (r.data and len(r.data) >= read_len) \
-               else bytes(read_len)
+        actual = len(r.data) if r.data else 0
+        if actual < read_len:
+            raise RuntimeError(
+                f"I2C passthrough exchange returned too few bytes: "
+                f"expected {read_len}, got {actual} "
+                f"(addr=0x{self._addr:02X})"
+            )
+        return bytes(r.data[:read_len])
 
     # --- DFU protocol commands ---
 
