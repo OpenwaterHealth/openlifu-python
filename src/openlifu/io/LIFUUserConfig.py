@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import struct
+import zlib
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants from C code
 LIFU_MAGIC = 0x4C494655  # 'LIFU'
-LIFU_VER = 0x00010002    # v1.0.0
+LIFU_VER = 0x00010002    # v1.0.2
 
 @dataclass
 class LifuUserConfigHeader:
@@ -138,6 +139,9 @@ class LifuUserConfig:
 
         # Update header with JSON length
         self.header.json_len = len(json_bytes)
+
+        # Update header CRC based on JSON payload (16-bit from CRC32)
+        self.header.crc = zlib.crc32(json_bytes) & 0xFFFF
 
         # Build wire format
         return self.header.to_bytes() + json_bytes
