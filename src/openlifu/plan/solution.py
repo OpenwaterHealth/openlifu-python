@@ -275,6 +275,7 @@ class Solution:
             solution_analysis.focal_centroid_ax_mm += [mainlobe_focus[2]]
 
             solution_analysis.mainlobe_pnp_MPa += [pk]
+            solution_analysis.focal_gain += [pk*1e6/np.max(p0_Pa)]
 
             for dim, named_dim, scale in zip(pnp_MPa.dims, ("lat","ele","ax"), options.mainlobe_aspect_ratio):
                 for threshdB in [3, 6]:

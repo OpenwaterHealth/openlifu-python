@@ -42,6 +42,7 @@ PARAM_FORMATS = {
     "TIC": [None, "0.2f", "", "TIC"],
     "voltage_V": [None, "0.1f", "V", "Voltage"],
     "p0_MPa": ["max", "0.3f", "MPa", "Emitted Pressure"],
+    "focal_gain": ["max", "0.2f", "", "Focal Gain"],
     "power_W": [None, "0.2f", "W", "Emitted Power"],
     "duty_cycle_pulse_train_pct": [None, "0.1f", "%", "Pulse Train Duty Cycle"],
     "duty_cycle_sequence_pct": [None, "0.1f", "%", "Sequence Duty Cycle"],
@@ -126,6 +127,9 @@ class SolutionAnalysis(DictMixin):
 
     p0_MPa: Annotated[list[float], OpenLIFUFieldData("Emitted pressure (MPa)", "Initial pressure values in the field, in MPa")] = field(default_factory=list)
     """Initial pressure values in the field (MPa)"""
+
+    focal_gain: Annotated[list[float], OpenLIFUFieldData("Focal gain", "Ratio of mainlobe peak pressure to emitted pressure")] = field(default_factory=list)
+    """Ratio of mainlobe peak pressure to emitted pressure"""
 
     power_W: Annotated[float | None, OpenLIFUFieldData("Emitted Power (W)", "Emitted power from the transducer face (W)")] = None
     """Emitted power from the transducer face (W)"""
