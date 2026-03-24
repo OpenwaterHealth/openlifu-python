@@ -95,9 +95,43 @@ def run_simulation(arr: xdc.Transducer,
                    return_kwave_outputs: bool = False,
                    return_kwave_inputs: bool = False,
                    sensor_record: List[str] = ['p_max', 'p_min'],
-                   _source: kSource|None = None,
-                   _sensor: kSensor|None = None
+                   _source = None,
+                   _sensor = None
 ):
+    """ Run a k-wave simulation for the given transducer array and parameters.
+    Args:
+        arr: The transducer array to simulate.
+        params: The simulation parameters as an xarray Dataset. Must include 'sound_speed', '
+        density', and 'attenuation' variables with appropriate units.
+        delays: Optional array of time delays for each element in the transducer array, in seconds. If None, no delays will be applied.
+        apod: Optional array of apodization values for each
+            element in the transducer array. If None, no apodization will be applied.
+        freq: The frequency of the input signal in Hz. Default is 1 MHz.
+        cycles: The number of cycles in the input signal. Default is 20.
+        amplitude: The amplitude of the input signal. Default is 1.
+        dt: The time step for the simulation in seconds. If 0, it will be automatically calculated based on the CFL condition.
+        t_end: The total time for the simulation in seconds. If 0, it will be automatically calculated based on the input signal duration and the CFL condition.
+        cfl: The Courant-Friedrichs-Lewy (CFL) number for the simulation. Default is 0.5.
+        bli_tolerance: The tolerance for the boundary layer integral method used in k-wave. Default
+            is 0.05.
+        upsampling_rate: The upsampling rate for the boundary layer integral method used in k-wave
+            Default is 5.
+        gpu: Whether to use GPU for the simulation. Default is True. If False, the simulation will run on the CPU. Note that running on CPU may be very slow for large simulations.
+        ref_values_only: Whether to use only the reference values for the medium properties (sound speed, density, attenuation) instead of the full spatial maps. Default is False. Setting this to True can significantly speed up the simulation, but will not capture any spatial variations in the medium properties.
+        return_kwave_outputs: Whether to return the raw outputs from k-wave in addition to the processed xarray Dataset. Default is False.
+        return_kwave_inputs: Whether to return the inputs to k-wave (kgrid, source, sensor, medium) in addition to the processed xarray Dataset. Default is False.
+        sensor_record: List of strings specifying which k-wave sensor outputs to record. Can include '
+        p_max', 'p_min', and 'p'. Default is ['p_max', 'p_min'].
+
+    Additional Args:
+        _source: Optional kSource object to use for the simulation. If None, a source will be created based on the transducer array and input signal.
+        _sensor: Optional kSensor object to use for the simulation. If None, a sensor
+
+    Returns:
+        An xarray Dataset containing the simulation results, with variables corresponding to the requested sensor outputs and
+        coordinates corresponding to the spatial dimensions of the simulation. If return_kwave_outputs is True, also returns a dictionary containing the raw outputs from k-wave. If return_kwave_inputs is True, also returns a dictionary containing the inputs to k-wave.
+
+            """
     from kwave.kspaceFirstOrder3D import kspaceFirstOrder3D
     from kwave.options.simulation_execution_options import SimulationExecutionOptions
     from kwave.options.simulation_options import SimulationOptions
@@ -111,10 +145,7 @@ def run_simulation(arr: xdc.Transducer,
         raise ValueError("All dimensions must have the same units")
     scl = getunitconversion(units[0], 'm')
     array_offset =[-float(coord.mean())*scl for coord in params.coords.values()]
-    karray = get_karray(arr,
-                        translation=array_offset,
-                        bli_tolerance=bli_tolerance,
-                        upsampling_rate=upsampling_rate)
+
     medium = get_medium(params, ref_values_only=ref_values_only)
     if _sensor is not None:
         sensor = _sensor
@@ -126,7 +157,31 @@ def run_simulation(arr: xdc.Transducer,
         source = _source
     else:
         source_mat = arr.calc_output(input_signal, kgrid.dt, delays, apod)
-        source = get_source(kgrid, karray, source_mat)
+    if arr.crosstalk_frac != 0:
+        """ Simulate crosstalk by adding additional elements to the array for each element that
+            is within the crosstalk distance, with the signal scaled by the crosstalk fraction.
+            This is a simple model of crosstalk and may not capture all the complexities of real
+            crosstalk, but it can be useful for testing and simulation purposes."""
+        crosstalk_arr = arr.copy()
+        crosstalk_mat = source_mat
+        positions = arr.get_positions(units="m")
+        for src_idx in range(arr.numelements()):
+             for dst_idx in range(arr.numelements()):
+                if src_idx == dst_idx:
+                    continue
+                src_pos = np.array(positions[src_idx])
+                dst_pos = np.array(positions[dst_idx])
+                dist = np.linalg.norm(src_pos - dst_pos)
+                if dist <= arr.crosstalk_dist:
+                    crosstalk_arr.elements += [arr.elements[dst_idx].copy()]
+                    crosstalk_mat = np.vstack((crosstalk_mat, arr.crosstalk_frac*source_mat[src_idx,:]))
+        arr = crosstalk_arr
+        source_mat = crosstalk_mat
+    karray = get_karray(arr,
+                        translation=array_offset,
+                        bli_tolerance=bli_tolerance,
+                        upsampling_rate=upsampling_rate)
+    source = get_source(kgrid, karray, source_mat)
     logging.info("Running simulation")
     simulation_options = SimulationOptions(
                             pml_auto=True,

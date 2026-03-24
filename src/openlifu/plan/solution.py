@@ -139,9 +139,21 @@ class Solution:
     def simulate(self,
         params: xa.Dataset,
         sim_options: SimSetup | None = None,
-        use_gpu: bool | None = None) -> xa.Dataset:
+        _force_cpu: bool = False) -> xa.Dataset:
+        """Run a simulation for this solution and store the result in the `simulation_result` attribute.
 
-        if use_gpu is None:
+        Args:
+            params: The simulation parameters as an xarray Dataset.
+            sim_options: Optional simulation setup options.
+            _force_cpu: Whether to force the simulation to run on the CPU. If True, the GPU will not be used even if available.
+
+        Returns:
+            The simulation result as an xarray Dataset.
+        """
+
+        if _force_cpu:
+            use_gpu = False
+        else:
             use_gpu = gpu_available()
 
         if sim_options is None:

@@ -162,7 +162,7 @@ solution2, sim_res2, analysis2 = protocol1.calc_solution(
 )
 solution2.apodizations[0,:128] = 0
 params = protocol1.sim_setup.setup_sim_scene(protocol1.seg_method)
-simulation_result = solution2.simulate(params=params, use_gpu=True)
+simulation_result = solution2.simulate(params=params)
 
 # %%
 simulation_result['p_min'].sel(focal_point_index=0).sel(y=0).plot.imshow()

@@ -22,7 +22,6 @@ from openlifu.plan.solution import Solution
 from openlifu.plan.solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
 from openlifu.plan.target_constraints import TargetConstraints
 from openlifu.util.annotations import OpenLIFUFieldData
-from openlifu.util.checkgpu import gpu_available
 from openlifu.util.json import PYFUSEncoder
 from openlifu.virtual_fit import VirtualFitOptions
 from openlifu.xdc import Transducer
@@ -250,8 +249,8 @@ class Protocol:
         sim_options: sim.SimSetup | None = None,
         analysis_options: SolutionAnalysisOptions | None = None,
         on_pulse_mismatch: OnPulseMismatchAction = OnPulseMismatchAction.ERROR,
-        use_gpu: bool | None = None,
-        voltage: float = 1.0
+        voltage: float = 1.0,
+        _force_cpu: bool = False
     ) -> Tuple[Solution, xa.DataArray, SolutionAnalysis]:
         """Calculate the solution and aggregated k-wave simulation outputs.
 
@@ -291,9 +290,6 @@ class Protocol:
             scaled_solution_analysis: SolutionAnalysis
                 This is the resulting rescaled analysis, if scale is enabled.
         """
-        if use_gpu is None:
-            use_gpu = gpu_available()
-
         if sim_options is None:
             sim_options = self.sim_setup
         if analysis_options is None:
@@ -346,7 +342,7 @@ class Protocol:
             simulation_result = solution.simulate(
                 params=params,
                 sim_options=sim_options,
-                use_gpu=use_gpu)
+                _force_cpu=_force_cpu)
             solution.simulation_result = simulation_result
 
         # optionally scale the solution with simulation result
