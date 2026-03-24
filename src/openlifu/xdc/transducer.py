@@ -98,12 +98,12 @@ class Transducer:
         if apod is None:
             apod = np.ones(self.numelements())
         if self.impulse_response is None:
-            filtered_input_signal = input_signal
+            filtered_input_signal = input_signal * 1
         else:
             impulse = self.interp_impulse_response(dt)
             filtered_input_signal = np.convolve(input_signal, impulse, mode='full')
         if self.sensitivity is not None:
-            filtered_input_signal *= self.sensitivity
+            filtered_input_signal = filtered_input_signal * self.sensitivity
         outputs = [np.concatenate([np.zeros(int(delay/dt)), a*element.calc_output(filtered_input_signal, dt)],axis=0) for element, delay, a, in zip(self.elements, delays, apod)]
         max_len = max([len(o) for o in outputs])
         output_signal = np.zeros([self.numelements(), max_len])
