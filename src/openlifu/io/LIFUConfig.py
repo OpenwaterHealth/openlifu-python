@@ -39,7 +39,7 @@ OW_CMD_NOP = 0x0E
 OW_CMD_RESET = 0x0F
 
 # Firmware Update / Module Commands (starting at 0x10)
-OW_CMD_GET_MODULE_COUNT = 0x10
+OW_CTRL_GET_MODULE_COUNT = 0x1A
 
 # Controller Commands
 OW_CTRL_SET_SWTRIG = 0x13
