@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import logging
+import pathlib
 from typing import List
 
 import numpy as np
@@ -77,6 +79,97 @@ def get_source(kgrid, karray, source_sig):
     source.p = karray.get_distributed_source_signal(kgrid, source_sig)
     return source
 
+def run_point_source_simulation(
+    params: xa.Dataset,
+    source_mask: np.ndarray,
+    sensor_mask: np.ndarray,
+    freq: float = 1e6,
+    n_cycles: int = 3,
+    sound_speed_ref: float = 1500.0,
+    cfl: float = 0.3,
+    gpu: bool = True,
+    ref_values_only: bool = False,
+):
+    """Run a k-wave simulation with a point source and sparse sensor mask.
+
+    Used by the SimulationCorrected delay method to implement the reciprocity
+    approach: a single point source is placed at the target and pressure time
+    series are recorded at transducer element positions.
+
+    :param params: Simulation grid dataset with sound_speed, density, attenuation.
+    :param source_mask: 3D binary array with 1 at the source (target) voxel.
+    :param sensor_mask: 3D binary array with 1s at sensor (element) voxels.
+    :param freq: Source frequency in Hz.
+    :param n_cycles: Number of cycles in the source pulse.
+    :param sound_speed_ref: Reference speed of sound (m/s) for time stepping.
+    :param cfl: Courant-Friedrichs-Lewy number for time stepping.
+    :param gpu: Whether to use GPU acceleration.
+    :param ref_values_only: If True, use reference (homogeneous) medium values.
+    :returns: Tuple of (sensor_data, dt) where sensor_data is a 2D array
+        (n_sensor_points, n_timesteps) and dt is the time step in seconds.
+    """
+    from kwave.ksensor import kSensor
+    from kwave.ksource import kSource
+    from kwave.kspaceFirstOrder3D import kspaceFirstOrder3D
+    from kwave.options.simulation_execution_options import SimulationExecutionOptions
+    from kwave.options.simulation_options import SimulationOptions
+
+    # Build kgrid
+    kgrid = get_kgrid(params.coords, sound_speed_ref=sound_speed_ref, cfl=cfl)
+    dt = float(kgrid.dt)
+
+    # Build medium
+    medium = get_medium(params, ref_values_only=ref_values_only)
+
+    # Build source: short sinusoidal burst at the target voxel
+    source = kSource()
+    source.p_mask = source_mask
+    t_sig = np.arange(0, n_cycles / freq, dt)
+    # Windowed tone burst: Hann window * sine
+    if len(t_sig) > 1:
+        window = np.hanning(len(t_sig))
+    else:
+        window = np.ones(len(t_sig))
+    source_signal = window * np.sin(2 * np.pi * freq * t_sig)
+    # kSource expects (n_source_points, n_timesteps) but for a single point
+    # source, a 1D signal is acceptable. Reshape to (1, N) to be safe.
+    source.p = source_signal.reshape(1, -1)
+
+    # Build sensor
+    sensor = kSensor(sensor_mask, record=['p'])
+
+    # Run simulation
+    logging.info("Running point source reciprocal simulation for delay correction")
+    simulation_options = SimulationOptions(
+        pml_auto=True,
+        pml_inside=False,
+        save_to_disk=True,
+        data_cast='single',
+    )
+    execution_options = SimulationExecutionOptions(is_gpu_simulation=gpu)
+    output = kspaceFirstOrder3D(
+        kgrid=kgrid,
+        source=source,
+        sensor=sensor,
+        medium=medium,
+        simulation_options=simulation_options,
+        execution_options=execution_options,
+    )
+    logging.info("Point source reciprocal simulation complete")
+
+    # Clean up temporary H5 files left by k-wave (#435)
+    for fpath in [simulation_options.input_filename, simulation_options.output_filename]:
+        with contextlib.suppress(OSError):
+            pathlib.Path(fpath).unlink(missing_ok=True)
+
+    # output['p'] has shape (n_sensor_points, n_timesteps)
+    sensor_data = output['p']
+    if sensor_data.ndim == 1:
+        sensor_data = sensor_data.reshape(1, -1)
+
+    return sensor_data, dt
+
+
 def run_simulation(arr: xdc.Transducer,
                    params: xa.Dataset,
                    delays: np.ndarray | None = None,
@@ -128,6 +221,12 @@ def run_simulation(arr: xdc.Transducer,
                                 simulation_options=simulation_options,
                                 execution_options=execution_options)
     logging.info('Simulation Complete')
+
+    # Clean up temporary H5 files left by k-wave (#435)
+    for fpath in [simulation_options.input_filename, simulation_options.output_filename]:
+        with contextlib.suppress(OSError):
+            pathlib.Path(fpath).unlink(missing_ok=True)
+
     sz = list(params.coords.sizes.values())
     p_max = xa.DataArray(output['p_max'].reshape(sz, order='F'),
                          coords=params.coords,
