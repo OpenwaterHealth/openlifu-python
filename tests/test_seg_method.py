@@ -14,7 +14,7 @@ def example_seg_method() -> seg_methods.UniformSegmentation:
                 name="water",
                 sound_speed=1500.0,
                 density=1000.0,
-                attenuation=0.0,
+                attenuation=0.002,
                 specific_heat=4182.0,
                 thermal_conductivity=0.598
             ),
@@ -22,7 +22,7 @@ def example_seg_method() -> seg_methods.UniformSegmentation:
                 name="skull",
                 sound_speed=4080.0,
                 density=1900.0,
-                attenuation=0.0,
+                attenuation=8.0,
                 specific_heat=1100.0,
                 thermal_conductivity=0.3
             ),
@@ -45,7 +45,7 @@ def test_uniform_seg_method_no_reference_material():
                     name="water",
                     sound_speed=1500.0,
                     density=1000.0,
-                    attenuation=0.0,
+                    attenuation=0.002,
                     specific_heat=4182.0,
                     thermal_conductivity=0.598
                 ),
@@ -53,7 +53,7 @@ def test_uniform_seg_method_no_reference_material():
                     name="skull",
                     sound_speed=4080.0,
                     density=1900.0,
-                    attenuation=0.0,
+                    attenuation=8.0,
                     specific_heat=1100.0,
                     thermal_conductivity=0.3
                 ),

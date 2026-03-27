@@ -103,6 +103,11 @@ filterwarnings = [
   "ignore:Custom binary name set.*:UserWarning",
   # pyparsing 3.x deprecated all camelCase methods in favor of snake_case
   "ignore:'[a-zA-Z]+' deprecated - use '[a-z_]+':DeprecationWarning",
+  # SimpleITK's SWIG bindings emit DeprecationWarnings about missing __module__
+  # attributes on builtin types during import. These are harmless and cannot be
+  # fixed downstream; suppressing them prevents a segfault when filterwarnings=error
+  # turns them into exceptions inside the C extension loader.
+  "ignore:builtin type Swig.*has no __module__ attribute:DeprecationWarning",
 ]
 log_cli_level = "INFO"
 testpaths = [
