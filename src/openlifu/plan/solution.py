@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -22,7 +23,9 @@ from openlifu.plan.solution_analysis import (
     get_beamwidth,
     get_mask,
 )
+from openlifu.sim import SimSetup, run_simulation
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.checkgpu import gpu_available
 from openlifu.util.json import PYFUSEncoder
 from openlifu.util.units import getunitconversion, rescale_coords, rescale_data_arr
 from openlifu.xdc import Transducer
@@ -98,6 +101,7 @@ class Solution:
     kind of confirmation that the solution is safe and acceptable to be executed."""
 
     def __post_init__(self):
+        self.logger = logging.getLogger(__name__)
         if self.delays is not None:
             self.delays = np.array(self.delays, ndmin=2)
         if self.apodizations is not None:
@@ -132,7 +136,64 @@ class Solution:
         """Get the number of foci"""
         return len(self.foci)
 
+    def simulate(self,
+        params: xa.Dataset,
+        sim_options: SimSetup | None = None,
+        _force_cpu: bool = False) -> xa.Dataset:
+        """Run a simulation for this solution and store the result in the `simulation_result` attribute.
+
+        Args:
+            params: The simulation parameters as an xarray Dataset.
+            sim_options: Optional simulation setup options.
+            _force_cpu: Whether to force the simulation to run on the CPU. If True, the GPU will not be used even if available.
+
+        Returns:
+            The simulation result as an xarray Dataset.
+        """
+
+        if _force_cpu:
+            use_gpu = False
+        else:
+            use_gpu = gpu_available()
+
+        if sim_options is None:
+            sim_options = SimSetup()
+        # check before if target is within bounds
+        simulation_outputs_to_stack: List[xa.Dataset] = []
+        simulation_cycles = np.round(self.pulse.duration * self.pulse.frequency)
+        for focidx, focus in enumerate(self.foci):
+            self.logger.info(f"Beamform for focus {focus}...")
+            delays = self.delays[focidx, :]
+            apodization = self.apodizations[focidx, :]
+            simulation_output_xarray = None
+            self.logger.info(f"Simulate for focus {focus}...")
+            run_simulation_kwargs = {
+                    "arr": self.transducer,
+                    "params": params,
+                    "delays": delays,
+                    "apod": apodization,
+                    "freq": self.pulse.frequency,
+                    "cycles": simulation_cycles,
+                    "dt": sim_options.dt,
+                    "t_end": sim_options.t_end,
+                    "cfl": sim_options.cfl,
+                    "amplitude": self.pulse.amplitude * self.voltage,
+                    "gpu": use_gpu
+                }
+            run_simulation_kwargs.update(sim_options.options)
+            simulation_output_xarray = run_simulation(
+                **run_simulation_kwargs)
+            simulation_outputs_to_stack.append(simulation_output_xarray)
+        return xa.concat(
+            [
+                sim.assign_coords(focal_point_index=i)
+                for i, sim in enumerate(simulation_outputs_to_stack)
+            ],
+            dim='focal_point_index',
+        )
+
     def analyze(self,
+                simulation_result: xa.Dataset | None = None,
                 options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
                 param_constraints: Dict[str,ParameterConstraint] | None = None) -> SolutionAnalysis:
         """Analyzes the treatment solution.
@@ -152,8 +213,13 @@ class Solution:
         t = self.pulse.calc_time(dt)
         input_signal_V = self.pulse.calc_pulse(t) * self.voltage
 
-        pnp_MPa_all = rescale_data_arr(rescale_coords(self.simulation_result['p_min'], options.distance_units),"MPa")
-        ipa_Wcm2_all = rescale_data_arr(rescale_coords(self.simulation_result['intensity'], options.distance_units), "W/cm^2")
+        if simulation_result is None:
+            if self.simulation_result is None or len(self.simulation_result)==0:
+                raise ValueError("No simulation result provided for analysis, and no simulation result found in the Solution.")
+            simulation_result = self.simulation_result
+
+        pnp_MPa_all = rescale_data_arr(rescale_coords(simulation_result['p_min'], options.distance_units),"MPa")
+        ipa_Wcm2_all = rescale_data_arr(rescale_coords(simulation_result['intensity'], options.distance_units), "W/cm^2")
 
         if options.sidelobe_radius is np.nan:
             options.sidelobe_radius = options.mainlobe_radius
@@ -174,7 +240,7 @@ class Solution:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_interval * self.sequence.pulse_count * self.sequence.pulse_train_count)
         else:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_train_interval * self.sequence.pulse_train_count)
-        ita_mWcm2 = rescale_coords(self.get_ita(units="mW/cm^2"), options.distance_units)
+        ita_mWcm2 = rescale_coords(self.get_ita(intensity=simulation_result['intensity'], units="mW/cm^2"), options.distance_units)
 
         power_W = np.zeros(self.num_foci())
         TIC = np.zeros(self.num_foci())
@@ -221,6 +287,7 @@ class Solution:
             solution_analysis.focal_centroid_ax_mm += [mainlobe_focus[2]]
 
             solution_analysis.mainlobe_pnp_MPa += [pk]
+            solution_analysis.focal_gain += [pk*1e6/np.max(p0_Pa)]
 
             for dim, named_dim, scale in zip(pnp_MPa.dims, ("lat","ele","ax"), options.mainlobe_aspect_ratio):
                 for threshdB in [3, 6]:
@@ -362,19 +429,25 @@ class Solution:
         sequence_duty_cycle = self.get_pulsetrain_dutycycle() * between_pulsetrain_duty_cycle
         return sequence_duty_cycle
 
-    def get_ita(self, units: str = "mW/cm^2") -> xa.DataArray:
+    def get_ita(self, intensity: xa.DataArray | None = None, units: str = "mW/cm^2") -> xa.DataArray:
         """
         Calculate the intensity-time-area product for a treatment solution.
 
         Args:
             output: A struct for simulation results from the treatment.
+            intensity: xa.DataArray | None
+                If provided, use this intensity data array instead of the one from the simulation result.
             units: str
                 Target units. Default "mW/cm^2".
+
 
         Returns:
             A Solution instance with the calculated intensity value.
         """
-        intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
+        if intensity is not None:
+            intensity_scaled = rescale_data_arr(intensity, units)
+        else:
+            intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
         pulsetrain_dutycycle = self.get_pulsetrain_dutycycle()
         treatment_dutycycle = self.get_sequence_dutycycle()
         pulse_seq = (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
@@ -397,6 +470,8 @@ class Solution:
         Returns: A dictionary representing the complete Solution object.
         """
         solution_dict = asdict(self)
+        if 'logger' in solution_dict:
+            solution_dict.pop('logger')
 
         if not include_simulation_data:
             solution_dict.pop('simulation_result')
