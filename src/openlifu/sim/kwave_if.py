@@ -11,7 +11,7 @@ from openlifu import xdc
 from openlifu.util.units import getunitconversion
 
 
-def get_kgrid(coords: xa.Coordinates, t_end = 0, dt = 0, sound_speed_ref=1500, cfl=0.5):
+def get_kgrid(coords: xa.Coordinates, t_end = 0, dt = 0, sound_speed_ref=1500, cfl=0.3):
     from kwave.kgrid import kWaveGrid
     units = [coords[dim].attrs['units'] for dim in coords.dims]
     if not all(unit == units[0] for unit in units):
@@ -132,9 +132,7 @@ def run_simulation(arr: xdc.Transducer,
         coordinates corresponding to the spatial dimensions of the simulation. If return_kwave_outputs is True, also returns a dictionary containing the raw outputs from k-wave. If return_kwave_inputs is True, also returns a dictionary containing the inputs to k-wave.
 
             """
-    from kwave.kspaceFirstOrder3D import kspaceFirstOrder3D
-    from kwave.options.simulation_execution_options import SimulationExecutionOptions
-    from kwave.options.simulation_options import SimulationOptions
+    from kwave.kspaceFirstOrder import kspaceFirstOrder
     delays = delays if delays is not None else np.zeros(arr.numelements())
     apod = apod if apod is not None else np.ones(arr.numelements())
     kgrid = get_kgrid(params.coords, dt=dt, t_end=t_end, cfl=cfl)
@@ -183,16 +181,9 @@ def run_simulation(arr: xdc.Transducer,
                         upsampling_rate=upsampling_rate)
     source = get_source(kgrid, karray, source_mat)
     logging.info("Running simulation")
-    simulation_options = SimulationOptions(
-                            pml_auto=True,
-                            pml_inside=False,
-                            save_to_disk=True,
-                            data_cast='single'
-                        )
-    execution_options = SimulationExecutionOptions(is_gpu_simulation=gpu)
-    inputs = {'kgrid':kgrid, 'source':source, 'sensor':sensor, 'medium':medium,
-              'simulation_options':simulation_options, 'execution_options':execution_options}
-    output = kspaceFirstOrder3D(**deepcopy(inputs))
+    device = 'gpu' if gpu else 'cpu'
+    inputs = {'kgrid':kgrid, 'source':source, 'sensor':sensor, 'medium':medium, 'device':device}
+    output = kspaceFirstOrder(**deepcopy(inputs))
     logging.info('Simulation Complete')
     sz = list(params.coords.sizes.values())
     ds_dict = {}

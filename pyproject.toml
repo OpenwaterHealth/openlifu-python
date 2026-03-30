@@ -30,7 +30,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "xarray[io]",
-  "numpy<2",
+  "numpy",
   "matplotlib",
   "pandas",
   "scipy",
@@ -43,16 +43,17 @@ dependencies = [
   "ipykernel",
   "pyserial",
   "crcmod",
-  "k-wave-python==0.4.0",
+  "k-wave-python==0.6.0",
   "nvidia-ml-py",
   "OpenEXR",
   "scikit-image",
   "trimesh",
   "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
-  "onnxruntime==1.18.0",
+  "onnxruntime",
   "pydicom",
   "watchdog",
-  "python-socketio[client]"
+  "python-socketio[client]",
+  "openpyxl"
 ]
 
 [project.optional-dependencies]
