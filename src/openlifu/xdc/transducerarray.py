@@ -45,8 +45,8 @@ class TransducerArray(DictMixin):
         if "attrs" in d:
             if "standoff_transform" in d["attrs"] and d["attrs"]["standoff_transform"] is not None:
                 d["attrs"]["standoff_transform"] = np.array(d["attrs"]["standoff_transform"])
-            if "impulse_response" in d["attrs"] and d["attrs"]["impulse_response"] is not None:
-                d["attrs"]["impulse_response"] = np.array(d["attrs"]["impulse_response"])
+            d["attrs"].pop("impulse_response", None)
+            d["attrs"].pop("impulse_dt", None)
         return TransducerArray(**d)
 
 
