@@ -197,6 +197,7 @@ class Solution:
         """Analyzes the treatment solution.
 
         Args:
+            simulation_result: The simulation result dataset to analyze. If None, uses self.simulation_result.
             options: A struct for solution analysis options.
             param_constraints: A dictionary of parameter constraints to apply to the analysis.
                 The keys are the parameter names and the values are the ParameterConstraint objects.

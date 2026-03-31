@@ -289,8 +289,10 @@ class Protocol:
             on_pulse_mismatch: plan.protocol.OnPulseMismatchAction
                 An action to take if the number of pulses in the sequence does not match
                 the number of foci (Default: OnPulseMismatchAction.ERROR).
-            use_gpu: Whether to use GPU in the simulation. If not provided then a GPU will be used
-                if available, with CPU as a fallback.
+            voltage: float
+                The voltage to use for the simulation (Default: 1.0).
+            _force_cpu: bool
+                If True, force the simulation to run on CPU even if GPU is available (Default: False).
 
         Returns:
             solution: Solution
