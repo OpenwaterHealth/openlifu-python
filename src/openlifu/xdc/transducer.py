@@ -11,10 +11,33 @@ import vtk
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
-from openlifu.xdc.element import Element
+from openlifu.xdc.element import (
+    Element,
+    generate_drive_signal,
+    sensitivity_at_frequency,
+)
 
 DIMS = ['x', 'y', 'z']
 LDIMS = Literal['x','y','z']
+
+
+def _combine_sensitivities(
+    base_sensitivity: float | dict[float, float],
+    scale_sensitivity: float | dict[float, float],
+) -> float | dict[float, float]:
+    if isinstance(base_sensitivity, dict) and isinstance(scale_sensitivity, dict):
+        base_keys = tuple(base_sensitivity.keys())
+        scale_keys = tuple(scale_sensitivity.keys())
+        if base_keys != scale_keys:
+            raise ValueError("Cannot combine sensitivity dictionaries with different frequency keys.")
+        return {frequency: base_sensitivity[frequency] * scale_sensitivity[frequency] for frequency in base_keys}
+    if isinstance(base_sensitivity, dict):
+        factor = float(scale_sensitivity)
+        return {frequency: value * factor for frequency, value in base_sensitivity.items()}
+    if isinstance(scale_sensitivity, dict):
+        factor = float(base_sensitivity)
+        return {frequency: factor * value for frequency, value in scale_sensitivity.items()}
+    return float(base_sensitivity) * float(scale_sensitivity)
 
 @dataclass
 class Transducer:
@@ -55,20 +78,14 @@ class Transducer:
     The units of this transform are assumed to be the native units of the transducer, the `Transducer.units` field.
     """
 
-    sensitivity: Annotated[float | None, OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V)")] = None
-    """Sensitivity of the element (Pa/V)"""
+    sensitivity: Annotated[float | dict[float, float], OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or {frequency_hz: sensitivity}")] = 1.0
+    """Sensitivity of the transducer (Pa/V), scalar or frequency-dependent dictionary."""
 
     crosstalk_frac: Annotated[float, OpenLIFUFieldData("Crosstalk fraction", "Fraction of the signal that leaks into other elements due to crosstalk")] = 0.0
     """Fraction of the signal that leaks into other elements due to crosstalk"""
 
     crosstalk_dist: Annotated[float, OpenLIFUFieldData("Crosstalk distance", "Distance within which elements experience crosstalk")] = 0.0
     """Distance within which elements experience crosstalk"""
-
-    impulse_response: Annotated[np.ndarray | None, OpenLIFUFieldData("Impulse response", "Impulse response of the element")] = None
-    """Impulse response of the element, can be a single value or an array of values. If an array, `impulse_dt` must be set to the time step of the impulse response. Is convolved with the input signal."""
-
-    impulse_dt: Annotated[float | None, OpenLIFUFieldData("Impulse response timestep", """Impulse response timestep""")] = None
-    """Impulse response timestep. If `impulse_response` is an array, this is the time step of the impulse response."""
 
     module_invert: Annotated[List[bool], OpenLIFUFieldData("Invert polarity", "Whether to invert the polarity of the transducer output, per module")] = field(default_factory=lambda: [False])
     """Whether to invert the polarity of the transducer output"""
@@ -79,38 +96,36 @@ class Transducer:
             self.name = self.id
         for element in self.elements:
             element.rescale(self.units)
-        if self.impulse_response is not None:
-            self.impulse_response = np.array(self.impulse_response, dtype=np.float64)
-            if self.impulse_response.ndim != 1 or len(self.impulse_response)<2:
-                raise ValueError("Impulse response must be a 1-dimensional array.")
-            if self.impulse_dt is None:
-                raise ValueError("Impulse response timestep must be set if impulse response is set.")
+        if self.sensitivity is None:
+            self.sensitivity = 1.0
+        elif isinstance(self.sensitivity, dict):
+            if len(self.sensitivity) == 0:
+                raise ValueError("Sensitivity dictionary must not be empty.")
+            mapping = {float(k): float(v) for k, v in self.sensitivity.items()}
+            freqs = np.array(sorted(mapping.keys()), dtype=np.float64)
+            if np.any(np.diff(freqs) <= 0):
+                raise ValueError("Sensitivity dictionary frequencies must be strictly increasing.")
+            self.sensitivity = {float(f): mapping[float(f)] for f in freqs}
+        else:
+            self.sensitivity = float(self.sensitivity)
 
+    def get_sensitivity(self, frequency: float) -> float:
+        return sensitivity_at_frequency(self.sensitivity, frequency)
 
-    def interp_impulse_response(self, dt=None):
-        if dt is None:
-            dt = self.impulse_dt
-        n0 = len(self.impulse_response)
-        t0 = self.impulse_dt * np.arange(n0)
-        t1 = np.arange(0, t0[-1] + dt, dt)
-        impulse_response = np.interp(t1, t0, self.impulse_response)
-        impulse_t = np.arange(len(impulse_response)) * dt
-        impulse_t = impulse_t - np.mean(impulse_t)
-        return impulse_response, impulse_t
-
-    def calc_output(self, input_signal, dt, delays: np.ndarray = None, apod: np.ndarray = None):
+    def calc_output(self, input_signal, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None):
         if delays is None:
             delays = np.zeros(self.numelements())
         if apod is None:
             apod = np.ones(self.numelements())
-        if self.impulse_response is None:
-            filtered_input_signal = input_signal * 1
-        else:
-            impulse = self.interp_impulse_response(dt)
-            filtered_input_signal = np.convolve(input_signal, impulse, mode='full')
-        if self.sensitivity is not None:
-            filtered_input_signal = filtered_input_signal * self.sensitivity
-        outputs = [np.concatenate([np.zeros(int(delay/dt)), a*element.calc_output(filtered_input_signal, dt)],axis=0) for element, delay, a, in zip(self.elements, delays, apod)]
+        drive_signal = generate_drive_signal(input_signal, cycles=cycles, frequency=frequency, dt=dt)
+        base_output = drive_signal * self.get_sensitivity(frequency)
+        outputs = [
+            np.concatenate(
+                [np.zeros(int(delay / dt)), a * element.get_sensitivity(frequency) * base_output],
+                axis=0,
+            )
+            for element, delay, a, in zip(self.elements, delays, apod)
+        ]
         max_len = max([len(o) for o in outputs])
         output_signal = np.zeros([self.numelements(), max_len])
         for i, o in enumerate(outputs):
@@ -235,22 +250,32 @@ class Transducer:
     @staticmethod
     def merge(list_of_transducers:List[Transducer], offset_pins:bool=False, offset_indices:bool=False, merge_mismatched_sensitivity=True, merged_attrs:dict={}) -> Transducer:
         array_copies = [arr.copy() for arr in list_of_transducers]
-        sensitivities = np.array([arr.sensitivity for arr in array_copies if arr.sensitivity is not None])
-        if len(sensitivities) > 0 and len(sensitivities) < len(array_copies):
-            raise ValueError("If one transducer has a sensitivity, all must have a sensitivity.")
-        if len(set(sensitivities)) > 1:
-            if not merge_mismatched_sensitivity:
-                raise ValueError("Transducers have different sensitivities. Use merge_mismatched_sensitivity=True to merge the relative sensitivities into the merged elements")
+        dict_key_sets = set()
+        for array in array_copies:
+            if isinstance(array.sensitivity, dict):
+                dict_key_sets.add(tuple(array.sensitivity.keys()))
+            for el in array.elements:
+                if isinstance(el.sensitivity, dict):
+                    dict_key_sets.add(tuple(el.sensitivity.keys()))
+        if len(dict_key_sets) > 1:
+            raise ValueError("Cannot merge sensitivities with different frequency keys.")
+
+        sensitivity_signatures = []
+        for array in array_copies:
+            if isinstance(array.sensitivity, dict):
+                sensitivity_signatures.append((tuple(array.sensitivity.keys()), tuple(array.sensitivity.values())))
             else:
-                max_sensitivity = sensitivities.max()
-                relative_sensitivities = sensitivities/max_sensitivity
-                for array, relative_sensitivity in zip(array_copies, relative_sensitivities):
-                    for el in array.elements:
-                        if el.sensitivity is not None:
-                            el.sensitivity = el.sensitivity * relative_sensitivity
-                        else:
-                            el.sensitivity = relative_sensitivity
-                    array.sensitivity = max_sensitivity
+                sensitivity_signatures.append(float(array.sensitivity))
+
+        if not merge_mismatched_sensitivity and len(set(sensitivity_signatures)) > 1:
+            raise ValueError("Transducers have different sensitivities. Use merge_mismatched_sensitivity=True to merge them into the merged elements")
+
+        for array in array_copies:
+            transducer_sensitivity = array.sensitivity
+            for el in array.elements:
+                el.sensitivity = _combine_sensitivities(el.sensitivity, transducer_sensitivity)
+            array.sensitivity = 1.0
+
         merged_array = array_copies[0]
         for xform_array in array_copies[1:]:
             if offset_pins:
@@ -287,12 +312,6 @@ class Transducer:
     def to_dict(self):
         d = self.__dict__.copy()
         d["elements"] = [element.to_dict() for element in d["elements"]]
-        if self.impulse_response is None:
-            del d["impulse_response"]
-        else:
-            d["impulse_response"] = d["impulse_response"].tolist()
-        if self.impulse_dt is None:
-            del d["impulse_dt"]
         d["standoff_transform"] =  d["standoff_transform"].tolist()
         return d
 
@@ -347,12 +366,11 @@ class Transducer:
     def from_dict(d, **kwargs):
         d = d.copy()
         d["elements"] = [Element.from_dict(element) for element in d["elements"]]
-        if "impulse_response" in d and d["impulse_response"] is not None:
-            if len(d["impulse_response"]) == 1 and "sensitivity" not in d:
-                d["sensitivity"] = d["impulse_response"][0]
-                del d["impulse_response"]
-            else:
-                d["impulse_response"] = np.array(d["impulse_response"])
+        # Backward compatibility: legacy impulse fields are ignored.
+        d.pop("impulse_response", None)
+        d.pop("impulse_dt", None)
+        if "sensitivity" not in d or d["sensitivity"] is None:
+            d["sensitivity"] = 1.0
         if "standoff_transform" in d and d["standoff_transform"] is not None:
             d["standoff_transform"] = np.array(d["standoff_transform"])
         return Transducer(**d, **kwargs)
@@ -385,8 +403,6 @@ class Transducer:
             pitch: distance between element centers
             kerf: distance between element edges
             units: units of the array dimensions
-            impulse_response: impulse response of the elements
-            impulse_dt: time step of the impulse response
             id: unique identifier
             name: name of the array
             attrs: additional attributes

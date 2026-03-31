@@ -156,7 +156,7 @@ def run_simulation(arr: xdc.Transducer,
     if _source is not None:
         source = _source
     else:
-        source_mat = arr.calc_output(input_signal, kgrid.dt, delays, apod)
+        source_mat = arr.calc_output(input_signal, cycles=cycles, frequency=freq, dt=kgrid.dt, delays=delays, apod=apod)
     if arr.crosstalk_frac != 0:
         # Simulate crosstalk by adding additional elements to the array for each element that
         #   is within the crosstalk distance, with the signal scaled by the crosstalk fraction.

@@ -10,6 +10,33 @@ from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
 
 
+def sensitivity_at_frequency(sensitivity: float | dict[float, float], frequency: float) -> float:
+    if isinstance(sensitivity, dict):
+        freqs = np.array(list(sensitivity.keys()), dtype=np.float64)
+        values = np.array(list(sensitivity.values()), dtype=np.float64)
+        return float(np.interp(frequency, freqs, values, left=values[0], right=values[-1]))
+    return float(sensitivity)
+
+
+def generate_drive_signal(input_signal, cycles: float, frequency: float, dt: float) -> np.ndarray:
+    """Generate a drive signal with duration constrained by cycles/frequency."""
+    if dt <= 0:
+        raise ValueError("dt must be positive.")
+    if frequency <= 0:
+        raise ValueError("frequency must be positive.")
+    if cycles <= 0:
+        raise ValueError("cycles must be positive.")
+    n_samples = max(1, int(np.round(cycles / (frequency * dt))))
+    if np.isscalar(input_signal):
+        t = np.arange(n_samples, dtype=np.float64) * dt
+        return float(input_signal) * np.sin(2 * np.pi * frequency * t)
+    base = np.asarray(input_signal, dtype=np.float64).reshape(-1)
+    drive_signal = np.zeros(n_samples, dtype=np.float64)
+    n_copy = min(n_samples, len(base))
+    drive_signal[:n_copy] = base[:n_copy]
+    return drive_signal
+
+
 def matrix2xyz(matrix):
     x = matrix[0, 3]
     y = matrix[1, 3]
@@ -43,14 +70,8 @@ class Element:
     size: Annotated[np.ndarray, OpenLIFUFieldData("Size", "Size of the element in 2D")] = field(default_factory=lambda: np.array([1., 1.]))
     """ Size of the element in 2D as a numpy array [width, length]."""
 
-    sensitivity: Annotated[float | None, OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V)")] = None
+    sensitivity: Annotated[float | dict[float, float], OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or {frequency_hz: sensitivity}")] = 1.0
     """Sensitivity of the element (Pa/V)"""
-
-    impulse_response: Annotated[np.ndarray | None, OpenLIFUFieldData("Impulse response", "Impulse response of the element")] = None
-    """Impulse response of the element, can be a single value or an array of values. If an array, `impulse_dt` must be set to the time step of the impulse response. Is convolved with the input signal."""
-
-    impulse_dt: Annotated[float | None, OpenLIFUFieldData("Impulse response timestep", """Impulse response timestep""")] = None
-    """Impulse response timestep. If `impulse_response` is an array, this is the time step of the impulse response."""
 
     pin: Annotated[int, OpenLIFUFieldData("Pin", "Channel pin to which the element is connected")] = -1
     """Channel pin to which the element is connected. 1-(64*number of modules)."""
@@ -68,14 +89,18 @@ class Element:
         self.size = np.array(self.size, dtype=np.float64)
         if self.size.shape != (2,):
             raise ValueError("Size must be a 2-element array.")
-        if self.impulse_response is not None:
-            if isinstance(self.impulse_response, int | float):
-                self.impulse_response = np.array([self.impulse_response])
-            self.impulse_response = np.array(self.impulse_response, dtype=np.float64)
-            if self.impulse_response.ndim != 1:
-                raise ValueError("Impulse response must be a 1-dimensional array.")
-            if len(self.impulse_response)>1 and self.impulse_dt is None:
-                raise ValueError("Impulse response timestep must be set if impulse response is an array.")
+        if self.sensitivity is None:
+            self.sensitivity = 1.0
+        elif isinstance(self.sensitivity, dict):
+            if len(self.sensitivity) == 0:
+                raise ValueError("Sensitivity dictionary must not be empty.")
+            mapping = {float(k): float(v) for k, v in self.sensitivity.items()}
+            freqs = np.array(sorted(mapping.keys()), dtype=np.float64)
+            if np.any(np.diff(freqs) <= 0):
+                raise ValueError("Sensitivity dictionary frequencies must be strictly increasing.")
+            self.sensitivity = {float(f): mapping[float(f)] for f in freqs}
+        else:
+            self.sensitivity = float(self.sensitivity)
 
     @property
     def x(self):
@@ -141,17 +166,12 @@ class Element:
     def length(self, value):
         self.size[1] = value
 
-    def calc_output(self, input_signal, dt):
-        if self.impulse_response is None:
-            filtered_signal = input_signal * 1
-        elif len(self.impulse_response) == 1:
-            filtered_signal = input_signal * self.impulse_response[0]
-        else:
-            impulse = self.interp_impulse_response(dt)
-            filtered_signal = np.convolve(input_signal, impulse, mode='full')
-        if self.sensitivity is not None:
-            filtered_signal = filtered_signal * self.sensitivity
-        return filtered_signal
+    def get_sensitivity(self, frequency: float) -> float:
+        return sensitivity_at_frequency(self.sensitivity, frequency)
+
+    def calc_output(self, input_signal, cycles: float, frequency: float, dt: float):
+        drive_signal = generate_drive_signal(input_signal, cycles=cycles, frequency=frequency, dt=dt)
+        return drive_signal * self.get_sensitivity(frequency)
 
     def copy(self):
         return copy.deepcopy(self)
@@ -225,17 +245,6 @@ class Element:
             roll = np.degrees(self.roll)
         return el, az, roll
 
-    def interp_impulse_response(self, dt=None):
-        if dt is None:
-            dt = self.impulse_dt
-        n0 = len(self.impulse_response)
-        t0 = self.impulse_dt * np.arange(n0)
-        t1 = np.arange(0, t0[-1] + dt, dt)
-        impulse_response = np.interp(t1, t0, self.impulse_response)
-        impulse_t = np.arange(len(impulse_response)) * dt
-        impulse_t = impulse_t - np.mean(impulse_t)
-        return impulse_response, impulse_t
-
     def distance_to_point(self, point, units=None, matrix=np.eye(4)):
         units = self.units if units is None else units
         pos = np.concatenate([self.get_position(units=units), [1]])
@@ -273,10 +282,7 @@ class Element:
                 "size": self.size.tolist(),
                 "pin": self.pin,
                 "units": self.units}
-        if self.impulse_response is not None:
-            d["impulse_response"] = self.impulse_response.tolist()
-        if self.impulse_dt is not None:
-            d["impulse_dt"] = self.impulse_dt
+        d["sensitivity"] = self.sensitivity
         return d
 
     @staticmethod
@@ -286,8 +292,9 @@ class Element:
             d["position"] = np.array([d.pop('x'), d.pop('y'), d.pop('z')])
             d["orientation"] = np.array([d.pop('az'), d.pop('el'), d.pop('roll')])
             d["size"] = np.array([d.pop('w'), d.pop('l')])
-        if "impulse_response" in d and d["impulse_response"] is not None:
-            d["impulse_response"] = np.array(d["impulse_response"])
-        if "impulse_dt" in d and d["impulse_dt"] is not None:
-            d["impulse_dt"] = float(d["impulse_dt"])
+        # Backward compatibility: legacy impulse keys are ignored.
+        d.pop("impulse_response", None)
+        d.pop("impulse_dt", None)
+        if "sensitivity" not in d or d["sensitivity"] is None:
+            d["sensitivity"] = 1.0
         return Element(**d)
