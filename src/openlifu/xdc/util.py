@@ -262,16 +262,18 @@ def load_transducer_from_file(transducer_filepath : PathLike, convert_array:bool
     return transducer
 
 def read_test_report(filename: PathLike) -> pd.DataFrame:
-    sections = [{"name": "info", "start_row": 3, "nrows": 3},
-                {"name": "txm", "start_row": 9, "nrows": 5},
-                {"name": "console", "start_row": 17, "nrows": 3},
-                {"name": "scans", "start_row": 23, "nrows": 7},
-                {"name": "freq", "start_row": 33, "nrows": 9},
-                {"name": "voltage", "start_row": 45, "nrows": 7}]
-
+    sections = [{"name": "info", "start_row": "A"},
+                {"name": "txm", "start_row": "B"},
+                {"name": "console", "start_row": "C"},
+                {"name": "scans", "start_row": "D"},
+                {"name": "freq", "start_row": "E"},
+                {"name": "voltage", "start_row": "F"}]
+    raw = pd.read_excel(filename, sheet_name="Report", header=None, usecols="A").rename({0: "Index"}, axis=1)
     all_data = []
     for section in sections:
-        report_df = pd.read_excel(filename, sheet_name="Report", skiprows=section["start_row"], nrows=section["nrows"], index_col=0, usecols="A:C")
+        skiprows = raw.loc[raw["Index"] == section["start_row"]].index[0]+1
+        nrows = raw['Index'].str.startswith(f'{section["start_row"]}.').sum()
+        report_df = pd.read_excel(filename, sheet_name="Report", skiprows=skiprows, nrows=nrows, index_col=0, usecols="A:C")
         report_df["Section"] = section["name"]
         all_data.append(report_df)
 
