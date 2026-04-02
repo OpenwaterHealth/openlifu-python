@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from . import seg_methods
-from .material import AIR, MATERIALS, SKULL, STANDOFF, TISSUE, WATER, Material
-from .seg_method import SegmentationMethod
+from openlifu.seg.material import (
+    AIR,
+    MATERIALS,
+    SKULL,
+    STANDOFF,
+    TISSUE,
+    WATER,
+    Material,
+)
+from openlifu.seg.seg_method import SegmentationMethod
+from openlifu.seg.virtual_fit import run_virtual_fit
 
 __all__ = [
     "Material",
@@ -13,5 +21,5 @@ __all__ = [
     "AIR",
     "STANDOFF",
     "SegmentationMethod",
-    "seg_methods",
+    "run_virtual_fit"
 ]

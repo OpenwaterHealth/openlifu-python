@@ -27,7 +27,7 @@ import numpy as np
 import openlifu
 from openlifu.bf.pulse import Pulse
 from openlifu.bf.sequence import Sequence
-from openlifu.io.LIFUInterface import LIFUInterface
+from openlifu_sdk.io.LIFUInterface import LIFUInterface
 from openlifu.plan.solution import Solution
 
 __version__ = "1.0.0"

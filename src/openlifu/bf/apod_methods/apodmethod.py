@@ -9,7 +9,7 @@ import pandas as pd
 import xarray as xa
 
 from openlifu.bf import apod_methods
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.xdc import Transducer
 
 

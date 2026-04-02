@@ -15,7 +15,7 @@ from typing import (
 import numpy as np
 import vtk
 
-from openlifu.geo import (
+from openlifu.geo.transforms import (
     cartesian_to_spherical,
     cartesian_to_spherical_vectorized,
     spherical_coordinate_basis,

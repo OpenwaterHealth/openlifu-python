@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import xarray as xa
 
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.seg import SegmentationMethod
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.dict_conversion import DictMixin

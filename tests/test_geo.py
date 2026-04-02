@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from openlifu.geo import (
-    Point,
+from openlifu.geo.point import Point
+from openlifu.geo.transforms import (
     cartesian_to_spherical,
     cartesian_to_spherical_vectorized,
     create_standoff_transform,

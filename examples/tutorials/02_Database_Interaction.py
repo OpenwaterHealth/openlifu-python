@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.3
+#       jupytext_version: 1.19.1
 #   kernelspec:
 #     display_name: env (3.11.4)
 #     language: python
@@ -43,7 +43,9 @@ from pathlib import Path
 
 import numpy as np
 
-from openlifu import Protocol, Pulse, Sequence, Transducer
+from openlifu.plan import Protocol
+from openlifu.bf import Pulse, Sequence
+from openlifu.xdc import Transducer
 from openlifu.bf import apod_methods, delay_methods, focal_patterns
 from openlifu.db import Database, Session, Subject
 from openlifu.db.database import OnConflictOpts
