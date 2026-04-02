@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from openlifu import User
+from openlifu.db import User
 
 
 @pytest.fixture()

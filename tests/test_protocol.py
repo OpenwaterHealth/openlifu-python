@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from openlifu import Protocol, Transducer
 from openlifu.bf.focal_patterns import Wheel
 from openlifu.db import Session
+from openlifu.plan import Protocol
 from openlifu.plan.protocol import OnPulseMismatchAction
 from openlifu.plan.target_constraints import TargetConstraints
+from openlifu.xdc import Transducer
 
 
 @pytest.fixture()

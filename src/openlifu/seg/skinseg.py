@@ -25,7 +25,10 @@ from scipy.interpolate import LinearNDInterpolator
 from scipy.ndimage import distance_transform_edt
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
-from openlifu.geo import cartesian_to_spherical, spherical_to_cartesian_vectorized
+from openlifu.geo.transforms import (
+    cartesian_to_spherical,
+    spherical_to_cartesian_vectorized,
+)
 
 
 def apply_affine_to_polydata(affine:np.ndarray, polydata:vtk.vtkPolyData) -> vtk.vtkPolyData:
