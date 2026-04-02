@@ -10,8 +10,8 @@ high-voltage console device over UART using the `LIFUUart` interface.
 ## Initialization
 
 ```python
-from openlifu.io.LIFUHVController import HVController
-from openlifu.io.LIFUUart import LIFUUart
+from openlifu_sdk.io.LIFUHVController import HVController
+from openlifu_sdk.io.LIFUUart import LIFUUart
 
 interface = LIFUInterface(TX_test_mode=False)
 tx_connected, hv_connected = interface.is_device_connected()

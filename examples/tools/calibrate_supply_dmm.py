@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import r2_score
 
-from openlifu.io.LIFUInterface import LIFUInterface
+from openlifu_sdk.io.LIFUInterface import LIFUInterface
 
 # set PYTHONPATH=%cd%\src;%PYTHONPATH%
 # python notebooks/calibrate_supply_dmm.py

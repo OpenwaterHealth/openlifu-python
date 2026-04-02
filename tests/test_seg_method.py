@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from openlifu.seg import MATERIALS, Material, SegmentationMethod, seg_methods
-from openlifu.seg.seg_methods.uniform import UniformSegmentation
 
 
 @pytest.fixture()
@@ -39,7 +38,7 @@ def test_seg_method_no_instantiate_abstract_class():
 
 def test_uniform_seg_method_no_reference_material():
     with pytest.raises(ValueError, match="Reference material non_existent_material not found."):
-        UniformSegmentation(
+        seg_methods.UniformSegmentation(
             materials = {
                 'water' : Material(
                     name="water",

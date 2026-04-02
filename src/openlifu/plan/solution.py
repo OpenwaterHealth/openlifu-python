@@ -14,7 +14,7 @@ import xarray as xa
 
 from openlifu.bf import Pulse, Sequence
 from openlifu.bf.focal_patterns import FocalPattern
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.plan.param_constraint import ParameterConstraint
 from openlifu.plan.solution_analysis import (
     SolutionAnalysis,

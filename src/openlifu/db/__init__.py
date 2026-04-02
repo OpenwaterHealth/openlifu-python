@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from .database import Database
-from .session import Session
-from .subject import Subject
-from .user import User
+from openlifu.db.database import Database
+from openlifu.db.session import Session
+from openlifu.db.subject import Subject
+from openlifu.db.user import User
 
 __all__ = [
     "Subject",
