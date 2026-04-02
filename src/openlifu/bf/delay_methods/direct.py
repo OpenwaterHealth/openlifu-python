@@ -8,7 +8,7 @@ import pandas as pd
 import xarray as xa
 
 from openlifu.bf.delay_methods import DelayMethod
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.xdc import Transducer
 

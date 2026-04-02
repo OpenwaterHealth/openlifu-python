@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .param_constraint import ParameterConstraint
-from .protocol import Protocol
-from .run import Run
-from .solution import Solution
-from .solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
-from .target_constraints import TargetConstraints
+from openlifu.plan.param_constraint import ParameterConstraint
+from openlifu.plan.protocol import Protocol
+from openlifu.plan.run import Run
+from openlifu.plan.solution import Solution
+from openlifu.plan.solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
+from openlifu.plan.target_constraints import TargetConstraints
 
 __all__ = [
     "Protocol",
@@ -14,5 +14,6 @@ __all__ = [
     "SolutionAnalysis",
     "SolutionAnalysisOptions",
     "TargetConstraints",
-    "ParameterConstraint"
+    "ParameterConstraint",
+    "run_virtual_fit"
 ]
