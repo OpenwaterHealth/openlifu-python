@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from openlifu.virtual_fit import VirtualFitOptions
+from openlifu.plan.virtual_fit import VirtualFitOptions
 
 
 def test_unit_conversion():

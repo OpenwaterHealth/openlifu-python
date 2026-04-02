@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Dict, List
 
 import h5py
-import nibabel as nib
 
 from openlifu.nav.photoscan import Photoscan, load_data_from_photoscan
 from openlifu.plan import Protocol, Run, Solution
@@ -956,6 +955,7 @@ class Database:
 
     def load_volume(self, subject, volume_id):
         """Load the volume with the given ID for the specified subject."""
+        import nibabel as nib
         volume_metadata_filepath = self.get_volume_metadata_filepath(subject.id, volume_id)
         if not volume_metadata_filepath.exists() or not volume_metadata_filepath.is_file():
             self.logger.error(f"Volume metadata file not found for volume {volume_id}, subject {subject.id}")

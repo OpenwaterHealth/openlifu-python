@@ -14,14 +14,9 @@ from pathlib import Path
 from subprocess import PIPE, CalledProcessError, CompletedProcess, Popen
 from typing import Annotated, Any, Callable, Dict, List, Tuple
 
-import cv2
 import numpy as np
-import onnxruntime as ort
-import OpenEXR
-import trimesh
 import vtk
 from PIL import Image
-from vtk.util.numpy_support import numpy_to_vtk
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.assets import download_and_install_modnet, get_modnet_path
@@ -177,6 +172,7 @@ def convert_numpy_to_vtkimage(image_numpy: np.ndarray) -> vtk.vtkImageData:
     """
     Converts a numpy array with dimensions [HxWx3] representing an RGB image into vtkImageData
     """
+    from vtk.util.numpy_support import numpy_to_vtk
     vtkimage_data = vtk.vtkImageData()
     vtkimage_data.SetDimensions(image_numpy.shape[1], image_numpy.shape[0], 1)
     vtkimage_data.SetNumberOfScalarComponents(image_numpy.shape[2], vtkimage_data.GetInformation())
@@ -187,7 +183,7 @@ def convert_numpy_to_vtkimage(image_numpy: np.ndarray) -> vtk.vtkImageData:
     return vtkimage_data
 
 def read_as_vtkimagedata(file_name) -> vtk.vtkImageData:
-
+    import OpenEXR
     suffix_to_reader_dict = {
         '.jpg' : vtk.vtkJPEGReader,
         '.png' : vtk.vtkPNGReader,
@@ -503,6 +499,7 @@ def merge_textures(input_obj_path: Path, output_path: Path) -> None:
         input_obj_path (Path): Path to .obj mesh to merge.
         output_path (Path): Path to save merged .obj mesh.
     """
+    import trimesh
     scene = trimesh.load(input_obj_path, process=True)
 
     if isinstance(scene, trimesh.Scene):
@@ -620,7 +617,7 @@ def preprocess_image_modnet(image: np.ndarray, ref_size: int = 512) -> np.ndarra
     Returns:
         np.ndarray: Preprocessed image in NCHW format with float32 values in [-1, 1].
     """
-
+    import cv2
     # Normalize image to [-1, 1]
     image = image.astype(np.float32) / 255.0
     image = 2 * image - 1
@@ -666,6 +663,8 @@ def make_masks(image_paths: list[Path], output_dir: Path, threshold: float = 0.0
     """
 
     # Load the ONNX model
+    import cv2
+    import onnxruntime as ort
 
     ckpt_path = get_modnet_path()
     if not ckpt_path.exists():

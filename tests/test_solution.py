@@ -10,9 +10,11 @@ import xarray as xa
 from helpers import dataclasses_are_equal
 from pytest_mock import MockerFixture
 
-from openlifu import Point, Pulse, Sequence, Solution, Transducer
+from openlifu.bf import Pulse, Sequence
 from openlifu.bf.focal_patterns import SinglePoint
-from openlifu.plan import SolutionAnalysis
+from openlifu.geo import Point
+from openlifu.plan import Solution, SolutionAnalysis
+from openlifu.xdc import Transducer
 from openlifu.xdc.element import Element
 
 

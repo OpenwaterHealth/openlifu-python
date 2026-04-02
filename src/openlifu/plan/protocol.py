@@ -14,16 +14,27 @@ import numpy as np
 import pandas as pd
 import xarray as xa
 
-from openlifu import bf, geo, seg, sim, xdc
-from openlifu.db.session import Session
+from openlifu.bf import (
+    ApodizationMethod,
+    DelayMethod,
+    FocalPattern,
+    Pulse,
+    Sequence,
+    SinglePoint,
+)
+from openlifu.bf.apod_methods import Uniform
+from openlifu.bf.delay_methods import Direct
 from openlifu.geo import Point
 from openlifu.plan.param_constraint import ParameterConstraint
 from openlifu.plan.solution import Solution
 from openlifu.plan.solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
 from openlifu.plan.target_constraints import TargetConstraints
+from openlifu.plan.virtual_fit import VirtualFitOptions
+from openlifu.seg import Material, SegmentationMethod
+from openlifu.seg.seg_methods import UniformWater
+from openlifu.sim import SimSetup
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.json import PYFUSEncoder
-from openlifu.virtual_fit import VirtualFitOptions
 from openlifu.xdc import Transducer
 
 OnPulseMismatchAction = Enum("OnPulseMismatchAction", ["ERROR", "ROUND", "ROUNDUP", "ROUNDDOWN"])
@@ -43,25 +54,25 @@ class Protocol:
     allowed_roles: Annotated[List[str], OpenLIFUFieldData("Allowed roles", "A list of user roles allowed to interact with this protocol")] = field(default_factory=list)
     """A list of user roles allowed to interact with this protocol"""
 
-    pulse: Annotated[bf.Pulse, OpenLIFUFieldData("Pulse definition", "The pulse definition used in the protocol")] = field(default_factory=bf.Pulse)
+    pulse: Annotated[Pulse, OpenLIFUFieldData("Pulse definition", "The pulse definition used in the protocol")] = field(default_factory=Pulse)
     """The pulse definition used in the protocol"""
 
-    sequence: Annotated[bf.Sequence, OpenLIFUFieldData("Pulse sequence", "The sequence of pulses used in the protocol")] = field(default_factory=bf.Sequence)
+    sequence: Annotated[Sequence, OpenLIFUFieldData("Pulse sequence", "The sequence of pulses used in the protocol")] = field(default_factory=Sequence)
     """The sequence of pulses used in the protocol"""
 
-    focal_pattern: Annotated[bf.FocalPattern, OpenLIFUFieldData("Focal pattern", "The focal pattern used in the protocol. By default, a single point is used")] = field(default_factory=bf.SinglePoint)
+    focal_pattern: Annotated[FocalPattern, OpenLIFUFieldData("Focal pattern", "The focal pattern used in the protocol. By default, a single point is used")] = field(default_factory=SinglePoint)
     """The focal pattern used in the protocol. By default, a single point is used"""
 
-    sim_setup: Annotated[sim.SimSetup, OpenLIFUFieldData("Simulation setup", "Configuration options for using k-wave to simulate wave propagation")] = field(default_factory=sim.SimSetup)
+    sim_setup: Annotated[SimSetup, OpenLIFUFieldData("Simulation setup", "Configuration options for using k-wave to simulate wave propagation")] = field(default_factory=SimSetup)
     """Configuration options for using k-wave to simulate wave propagation"""
 
-    delay_method: Annotated[bf.DelayMethod, OpenLIFUFieldData("Delay method", "The method used to calculate transmit delays. By default, delays are calculated using a nominal speed of sound")] = field(default_factory=bf.delay_methods.Direct)
+    delay_method: Annotated[DelayMethod, OpenLIFUFieldData("Delay method", "The method used to calculate transmit delays. By default, delays are calculated using a nominal speed of sound")] = field(default_factory=Direct)
     """The method used to calculate transmit delays. By default, delays are calculated using a nominal speed of sound"""
 
-    apod_method: Annotated[bf.ApodizationMethod, OpenLIFUFieldData("Apodization method", "The method used to calculate transmit apodizations. By default, apodizations are uniform")] = field(default_factory=bf.apod_methods.Uniform)
+    apod_method: Annotated[ApodizationMethod, OpenLIFUFieldData("Apodization method", "The method used to calculate transmit apodizations. By default, apodizations are uniform")] = field(default_factory=Uniform)
     """The method used to calculate transmit apodizations. By default, apodizations are uniform"""
 
-    seg_method: Annotated[seg.SegmentationMethod, OpenLIFUFieldData("Segmentation method", "The method used to segment the subject's MRI for delay calculation. By default, the entire field is assumed to be water")] = field(default_factory=seg.seg_methods.UniformWater)
+    seg_method: Annotated[SegmentationMethod, OpenLIFUFieldData("Segmentation method", "The method used to segment the subject's MRI for delay calculation. By default, the entire field is assumed to be water")] = field(default_factory=UniformWater)
     """The method used to segment the subject's MRI for delay calculation. By default, the entire field is assumed to be water"""
 
     param_constraints: Annotated[dict, OpenLIFUFieldData("Parameter constraints", "The constraints on the analysis parameters. If computed parameters are outside of the ranges defined here, warnings or errors may be flagged to reject the solution")] = field(default_factory=dict)
@@ -81,16 +92,16 @@ class Protocol:
 
     @staticmethod
     def from_dict(d : Dict[str,Any]) -> Protocol:
-        d["pulse"] = bf.Pulse.from_dict(d.get("pulse", {}))
-        d["sequence"] = bf.Sequence.from_dict(d.get("sequence", {}))
-        d["focal_pattern"] = bf.FocalPattern.from_dict(d.get("focal_pattern", {}))
-        d["sim_setup"] = sim.SimSetup.from_dict(d.get("sim_setup", {}))
-        d["delay_method"] = bf.DelayMethod.from_dict(d.get("delay_method", {}))
-        d["apod_method"] = bf.ApodizationMethod.from_dict(d.get("apod_method", {}))
+        d["pulse"] = Pulse.from_dict(d.get("pulse", {}))
+        d["sequence"] = Sequence.from_dict(d.get("sequence", {}))
+        d["focal_pattern"] = FocalPattern.from_dict(d.get("focal_pattern", {}))
+        d["sim_setup"] = SimSetup.from_dict(d.get("sim_setup", {}))
+        d["delay_method"] = DelayMethod.from_dict(d.get("delay_method", {}))
+        d["apod_method"] = ApodizationMethod.from_dict(d.get("apod_method", {}))
         seg_method_dict = d.get("seg_method", {})
         if "materials" in d:
-            seg_method_dict["materials"] = seg.Material.from_dict(d.pop("materials"))
-        d["seg_method"] = seg.SegmentationMethod.from_dict(seg_method_dict)
+            seg_method_dict["materials"] = Material.from_dict(d.pop("materials"))
+        d["seg_method"] = SegmentationMethod.from_dict(seg_method_dict)
         d['param_constraints'] = {key: ParameterConstraint.from_dict(val) for key, val in d.get("param_constraints", {}).items()}
         if "target_constraints" in d:
             d['target_constraints'] = [TargetConstraints.from_dict(d_tc) for d_tc in d.get("target_constraints", {})]
@@ -124,7 +135,7 @@ class Protocol:
             d = json.load(f)
         return Protocol.from_dict(d)
 
-    def beamform(self, arr: xdc.Transducer, target:geo.Point, params: xa.Dataset):
+    def beamform(self, arr: Transducer, target:Point, params: xa.Dataset):
         delays = self.delay_method.calc_delays(arr, target, params)
         apod = self.apod_method.calc_apodization(arr, target, params)
         return delays, apod
@@ -243,10 +254,12 @@ class Protocol:
         transducer: Transducer,
         volume: xa.DataArray | None = None,
         params: xa.Dataset | None = None,
-        session: Session | None = None,
+        session = None,
+        solution_id: str | None = None,
+        solution_name: str | None = None,
         simulate: bool = True,
         scale: bool = True,
-        sim_options: sim.SimSetup | None = None,
+        sim_options: SimSetup | None = None,
         analysis_options: SolutionAnalysisOptions | None = None,
         on_pulse_mismatch: OnPulseMismatchAction = OnPulseMismatchAction.ERROR,
         voltage: float = 1.0,
@@ -326,13 +339,16 @@ class Protocol:
             delays_to_stack.append(delays)
             apodizations_to_stack.append(apodization)
         # instantiate and return the solution
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        solution_id = timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if solution_id is None:
+            solution_id = f"{self.id}_{timestamp}"
+        if solution_name is None:
+            solution_name = f"{self.name} ({timestamp})"
         if session is not None:
-            solution_id = f"{session.id}_{solution_id}"
+            self.logger.warning("Session provided to calc_solution, but session handling is no longer used in this method. Ensure that solution_id is assigned appropriately if using sessions.")
         solution =  Solution(
             id=solution_id,
-            name=f"Solution {timestamp}",
+            name=solution_name,
             protocol_id=self.id,
             transducer=transducer,
             delays=np.stack(delays_to_stack, axis=0),

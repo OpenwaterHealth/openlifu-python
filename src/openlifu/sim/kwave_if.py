@@ -7,8 +7,8 @@ from typing import List
 import numpy as np
 import xarray as xa
 
-from openlifu import xdc
 from openlifu.util.units import getunitconversion
+from openlifu.xdc import Transducer
 
 
 def get_kgrid(coords: xa.Coordinates, t_end = 0, dt = 0, sound_speed_ref=1500, cfl=0.5):
@@ -27,7 +27,7 @@ def get_kgrid(coords: xa.Coordinates, t_end = 0, dt = 0, sound_speed_ref=1500, c
         kgrid.setTime(Nt, dt)
     return kgrid
 
-def get_karray(arr: xdc.Transducer,
+def get_karray(arr: Transducer,
                bli_tolerance: float = 0.05,
                upsampling_rate: int = 5,
                translation: List[float] = [0.,0.,0.],
@@ -78,7 +78,7 @@ def get_source(kgrid, karray, source_sig):
     source.p = karray.get_distributed_source_signal(kgrid, source_sig)
     return source
 
-def run_simulation(arr: xdc.Transducer,
+def run_simulation(arr: Transducer,
                    params: xa.Dataset,
                    delays: np.ndarray | None = None,
                    apod: np.ndarray | None = None,
