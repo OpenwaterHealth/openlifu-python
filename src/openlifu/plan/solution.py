@@ -22,6 +22,7 @@ from openlifu.plan.solution_analysis import (
     find_centroid,
     get_beamwidth,
     get_mask,
+    model_tx_temperature_rise,
 )
 from openlifu.sim import SimSetup, run_simulation
 from openlifu.util.annotations import OpenLIFUFieldData
@@ -30,6 +31,7 @@ from openlifu.util.json import PYFUSEncoder
 from openlifu.util.units import getunitconversion, rescale_coords, rescale_data_arr
 from openlifu.xdc import Transducer
 
+logger = logging.getLogger(__name__)
 
 def _construct_nc_filepath_from_json_filepath(json_filepath:Path) -> Path:
     """Construct a default filepath to netCDF file given filepath to associated solution json file."""
@@ -342,9 +344,44 @@ class Solution:
         solution_analysis.TIC = np.mean(TIC)
         solution_analysis.voltage_V = self.voltage
         solution_analysis.power_W = np.mean(power_W)
-
+        solution_analysis.estimated_tx_temperature_rise_C = self.estimate_tx_temperature_rise(
+            t_sec=solution_analysis.sequence_duration_s,
+        )
         solution_analysis.param_constraints = param_constraints
         return solution_analysis
+
+    def estimate_tx_temperature_rise(self,
+                                  t_sec: float,
+                                  T0_degC: float = 30.0):
+
+        """
+        Standalone temperature prediction function for thermal modeling.
+
+        Based on physics-based power decay gradient model fitted from experimental data.
+        Model: dT/dt = (t + t_shift)^(-n) + C
+
+        Parameters:
+        -----------
+        self: Solution
+            The treatment solution containing voltage and pulse information.
+        t_sec: float
+            Time in seconds for which to predict temperature rise.
+        T0_degC: float
+            Initial temperature in Celsius. Default is 30.0°C.
+
+        Returns:
+        --------
+        float
+            Predicted temperature rise in Celsius
+        """
+        return model_tx_temperature_rise(
+            voltage=self.voltage,
+            t_sec=t_sec,
+            duty_cycle=self.get_sequence_dutycycle(),
+            apodization_fraction=np.mean(self.apodizations),
+            frequency_kHz=self.pulse.frequency / 1e3,
+            T0_degC=T0_degC,
+        )
 
     def compute_scaling_factors(
             self,
