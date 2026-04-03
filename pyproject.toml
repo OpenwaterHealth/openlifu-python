@@ -130,6 +130,9 @@ Changelog = "https://github.com/OpenwaterHealth/OpenLIFU-python/releases"
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/openlifu/_version.py"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.envs.default]
 features = ["test"]
 scripts.test = "pytest {args}"
