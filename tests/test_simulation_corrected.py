@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import numpy as np
 import pytest
 
 from openlifu.bf.delay_methods import DelayMethod, SimulationCorrected
@@ -126,3 +129,58 @@ class TestSimulationCorrectedTable:
         assert table.iloc[0]['Value'] == 'SimulationCorrected'
         assert table.iloc[1]['Name'] == 'Default Sound Speed'
         assert table.iloc[1]['Value'] == 1500.0
+
+
+class TestSimulationCorrectedBehavior:
+    """Test delay calculation logic by mocking the k-wave simulation layer."""
+
+    def test_delays_from_known_arrival_times(self):
+        """When _run_reciprocal_simulation returns known arrival times,
+        calc_delays should return max(arrival) - arrival for each element."""
+        arrival_times = np.array([0.001, 0.002, 0.003])
+        expected_delays = np.array([0.002, 0.001, 0.0])
+
+        method = SimulationCorrected()
+        with patch.object(
+            SimulationCorrected,
+            "_run_reciprocal_simulation",
+            return_value=arrival_times,
+        ), patch("importlib.util.find_spec", return_value=True):
+            delays = method.calc_delays(
+                arr=None, target=None, params=None, transform=None
+            )
+        np.testing.assert_allclose(delays, expected_delays)
+
+    def test_fallback_on_simulation_failure(self):
+        """When _run_reciprocal_simulation raises, calc_delays should
+        fall back to Direct geometric delays without crashing."""
+        method = SimulationCorrected()
+        with patch.object(
+            SimulationCorrected,
+            "_run_reciprocal_simulation",
+            side_effect=RuntimeError("mocked failure"),
+        ), patch("importlib.util.find_spec", return_value=True), patch.object(
+            SimulationCorrected,
+            "_fallback_delays",
+            return_value=np.array([0.0, 0.0, 0.0]),
+        ) as mock_fallback:
+            delays = method.calc_delays(
+                arr=None, target=None, params=None, transform=None
+            )
+        mock_fallback.assert_called_once()
+        np.testing.assert_array_equal(delays, [0.0, 0.0, 0.0])
+
+    def test_fallback_when_kwave_missing(self):
+        """When k-wave is not installed, calc_delays should fall back
+        to Direct geometric delays."""
+        method = SimulationCorrected()
+        with patch("importlib.util.find_spec", return_value=None), patch.object(
+            SimulationCorrected,
+            "_fallback_delays",
+            return_value=np.array([0.0, 0.0]),
+        ) as mock_fallback:
+            delays = method.calc_delays(
+                arr=None, target=None, params=None, transform=None
+            )
+        mock_fallback.assert_called_once()
+        np.testing.assert_array_equal(delays, [0.0, 0.0])

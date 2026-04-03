@@ -289,6 +289,30 @@ def test_classify_brain_gmm_failure_fallback() -> None:
         assert set(np.unique(result.to_numpy()[brain_voxels])) == {idx["gray_matter"]}
 
 
+def test_classify_brain_degenerate_constant_intensity() -> None:
+    """When the brain interior has near-constant intensity, the GMM cannot
+    fit meaningful components. All brain voxels should fall back to
+    gray_matter rather than collapsing to CSF (argmax class 0)."""
+    volume = create_synthetic_head_volume(shape=(64, 64, 64), intensity=100.0)
+    seg = ThresholdMRI(
+        classify_brain_tissues=True,
+        air_threshold_quantile=0.0,
+        skull_thickness_mm=7.0,
+    )
+    result = seg._segment(volume)
+    idx = seg._material_indices()
+    brain_labels = {idx["csf"], idx["gray_matter"], idx["white_matter"]}
+    brain_voxels = np.isin(result.to_numpy(), list(brain_labels))
+    if np.any(brain_voxels):
+        unique_brain = set(np.unique(result.to_numpy()[brain_voxels]))
+        assert idx["gray_matter"] in unique_brain, (
+            "Degenerate GMM should fall back to gray_matter"
+        )
+        assert idx["csf"] not in unique_brain, (
+            "Degenerate GMM should not produce all-CSF labels"
+        )
+
+
 def test_gmm_preserves_natural_class_proportions() -> None:
     """EM-GMM should recover class proportions that reflect the actual geometry
     of the concentric spheres, NOT force them to ~33% each (as histogram
