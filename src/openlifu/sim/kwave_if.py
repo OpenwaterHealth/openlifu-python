@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from copy import deepcopy
 import pathlib
+from copy import deepcopy
 from typing import List
 
 import numpy as np
