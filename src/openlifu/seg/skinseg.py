@@ -98,9 +98,7 @@ def compute_foreground_mask(
     # the point of this step is rather to clean up and smooth out the skin surface of small cavities.
     # Uses binary_closing with a 6-connected structuring element iterated
     # closing_radius times, which is much faster than the original two-pass
-    # EDT approach (~15x). The diamond-shaped kernel produces slightly
-    # different boundary voxels (<0.2%) versus the EDT's Euclidean ball,
-    # but this does not affect downstream segmentation quality.
+    # EDT approach (~15x).
     closing_r = int(closing_radius)
     if closing_r > 0:
         pad_width = closing_r + 2
