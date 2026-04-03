@@ -113,7 +113,7 @@ class Element:
     size: Annotated[np.ndarray, OpenLIFUFieldData("Size", "Size of the element in 2D")] = field(default_factory=lambda: np.array([1., 1.]))
     """ Size of the element in 2D as a numpy array [width, length]."""
 
-    sensitivity: Annotated[float | dict[float, float], OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or {frequency_hz: sensitivity}")] = 1.0
+    sensitivity: Annotated[float | dict, OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or {'freq_Hz':[...], 'values_Pa_per_V':[...]}")] = 1.0
     """Sensitivity of the element (Pa/V)"""
 
     pin: Annotated[int, OpenLIFUFieldData("Pin", "Channel pin to which the element is connected")] = -1
@@ -134,16 +134,7 @@ class Element:
             raise ValueError("Size must be a 2-element array.")
         if self.sensitivity is None:
             self.sensitivity = 1.0
-        elif isinstance(self.sensitivity, dict):
-            if len(self.sensitivity) == 0:
-                raise ValueError("Sensitivity dictionary must not be empty.")
-            mapping = {float(k): float(v) for k, v in self.sensitivity.items()}
-            freqs = np.array(sorted(mapping.keys()), dtype=np.float64)
-            if np.any(np.diff(freqs) <= 0):
-                raise ValueError("Sensitivity dictionary frequencies must be strictly increasing.")
-            self.sensitivity = {float(f): mapping[float(f)] for f in freqs}
-        else:
-            self.sensitivity = float(self.sensitivity)
+        self.sensitivity = normalize_sensitivity(self.sensitivity)
 
     @property
     def x(self):

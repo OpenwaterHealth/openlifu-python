@@ -116,7 +116,7 @@ def test_transducer_calc_output_interpolates_dictionary_sensitivity():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={100e3: 1.0, 300e3: 3.0},
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [1.0, 3.0]},
     )
     transducer.elements[0].sensitivity = 1.0
     input_signal = np.array([1.0, -1.0, 0.5], dtype=float)
@@ -126,6 +126,16 @@ def test_transducer_calc_output_interpolates_dictionary_sensitivity():
 
     np.testing.assert_allclose(output_mid[0, :len(input_signal)], 2.0 * input_signal)
     np.testing.assert_allclose(output_low[0, :len(input_signal)], 1.0 * input_signal)
+
+
+def test_legacy_sensitivity_mapping_is_normalized_to_schema():
+    transducer = Transducer(
+        sensitivity={"100000.0": 1.0, "300000.0": 3.0},
+    )
+    assert transducer.sensitivity == {
+        "freq_Hz": [100000.0, 300000.0],
+        "values_Pa_per_V": [1.0, 3.0],
+    }
 
 
 def test_element_calc_output_generates_signal_from_scalar_input():
@@ -161,13 +171,13 @@ def test_merge_pushes_transducer_sensitivity_into_elements():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={100e3: 2.0, 300e3: 4.0},
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
     )
     transducer_b = Transducer.gen_matrix_array(
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={100e3: 3.0, 300e3: 6.0},
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [3.0, 6.0]},
     )
     transducer_a.elements[0].sensitivity = 5.0
     transducer_b.elements[0].sensitivity = 7.0
@@ -175,8 +185,8 @@ def test_merge_pushes_transducer_sensitivity_into_elements():
     merged = Transducer.merge([transducer_a, transducer_b], merge_mismatched_sensitivity=True)
 
     assert merged.sensitivity == 1.0
-    assert merged.elements[0].sensitivity == {100e3: 10.0, 300e3: 20.0}
-    assert merged.elements[1].sensitivity == {100e3: 21.0, 300e3: 42.0}
+    assert merged.elements[0].sensitivity == {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [10.0, 20.0]}
+    assert merged.elements[1].sensitivity == {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [21.0, 42.0]}
 
 
 def test_merge_rejects_mismatched_sensitivity_keys():
@@ -184,16 +194,16 @@ def test_merge_rejects_mismatched_sensitivity_keys():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={100e3: 2.0, 300e3: 4.0},
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
     )
     transducer_b = Transducer.gen_matrix_array(
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={100e3: 3.0, 400e3: 6.0},
+        sensitivity={"freq_Hz": [100e3, 400e3], "values_Pa_per_V": [3.0, 6.0]},
     )
-    transducer_a.elements[0].sensitivity = {100e3: 5.0, 300e3: 7.0}
-    transducer_b.elements[0].sensitivity = {100e3: 11.0, 400e3: 13.0}
+    transducer_a.elements[0].sensitivity = {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [5.0, 7.0]}
+    transducer_b.elements[0].sensitivity = {"freq_Hz": [100e3, 400e3], "values_Pa_per_V": [11.0, 13.0]}
 
     with pytest.raises(ValueError, match="different frequency keys"):
         Transducer.merge([transducer_a, transducer_b], merge_mismatched_sensitivity=True)
