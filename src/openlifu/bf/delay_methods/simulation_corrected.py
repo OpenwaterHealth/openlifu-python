@@ -248,7 +248,7 @@ class SimulationCorrected(DelayMethod):
             if el_i in out_of_grid:
                 # Element is outside the simulation grid; use geometric fallback
                 dist = np.linalg.norm(element_positions_m[el_i] - target.get_position(units="m"))
-                arrival_times[el_i] = dist / self.c0
+                arrival_times[el_i] = dist / sound_speed_ref
                 continue
 
             row = voxel_to_row[sensor_idx]

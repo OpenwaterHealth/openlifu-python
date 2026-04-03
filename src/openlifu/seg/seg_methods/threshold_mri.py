@@ -909,6 +909,12 @@ class ThresholdMRI(SegmentationMethod):
         # Extract parenchyma intensities for the initial fit.
         parenchyma_vals = classify_data[parenchyma_mask]
 
+        # Guard against near-constant intensity distributions where a
+        # 3-component GMM would be degenerate (all components collapse
+        # to the same mean, posteriors tie, argmax assigns class 0).
+        if float(np.ptp(parenchyma_vals)) < 1e-6:
+            raise ValueError("Parenchyma intensity range is near-zero; GMM cannot fit")
+
         # Initial GMM fit on raw parenchyma intensities.
         means, stds, weights = self._fit_gmm_1d(
             parenchyma_vals, n_components=n_components
