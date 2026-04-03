@@ -12,7 +12,7 @@ from pytest_mock import MockerFixture
 
 from openlifu.bf import Pulse, Sequence
 from openlifu.bf.focal_patterns import SinglePoint
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.plan import Solution, SolutionAnalysis
 from openlifu.xdc import Transducer
 from openlifu.xdc.element import Element

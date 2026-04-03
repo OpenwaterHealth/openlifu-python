@@ -10,7 +10,7 @@ import numpy as np
 class PYFUSEncoder(json.JSONEncoder):
     def default(self, obj):
         from openlifu.db.subject import Subject
-        from openlifu.geo import Point
+        from openlifu.geo.point import Point
         from openlifu.plan.solution_analysis import SolutionAnalysisOptions
         from openlifu.seg.material import Material
         from openlifu.xdc.element import Element

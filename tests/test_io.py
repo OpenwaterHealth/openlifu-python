@@ -25,7 +25,7 @@ def example_solution():
 def test_lifu_interface_with_solution(lifu_interface, example_solution):
     assert all(lifu_interface.is_device_connected())
     # Load the example solution
-    lifu_interface.set_solution(example_solution)
+    lifu_interface.set_solution(example_solution.to_dict())
 
 # Create invalid duty cycle solution
 @pytest.fixture()
@@ -38,7 +38,7 @@ def invalid_duty_cycle_solution():
 # Test LIFUInterface with invalid solution
 def test_lifu_interface_with_invalid_solution(lifu_interface, invalid_duty_cycle_solution):
     with pytest.raises(ValueError, match=R"Sequence duty cycle"):
-        lifu_interface.set_solution(invalid_duty_cycle_solution)
+        lifu_interface.set_solution(invalid_duty_cycle_solution.to_dict())
 
 # Create invalid voltage solution
 @pytest.fixture()
@@ -50,7 +50,7 @@ def invalid_voltage_solution():
 # Test LIFUInterface with invalid voltage solution
 def test_lifu_interface_with_invalid_voltage_solution(lifu_interface, invalid_voltage_solution):
     with pytest.raises(ValueError, match=R"exceeds maximum allowed voltage"):
-        lifu_interface.set_solution(invalid_voltage_solution)
+        lifu_interface.set_solution(invalid_voltage_solution.to_dict())
 
 # Create too long sequence solution
 @pytest.fixture()
@@ -67,4 +67,4 @@ def too_long_sequence_solution():
 # Test LIFUInterface with too long sequence solution
 def test_lifu_interface_with_too_long_sequence_solution(lifu_interface, too_long_sequence_solution):
     with pytest.raises(ValueError, match=R"exceeds maximum allowed voltage"):
-        lifu_interface.set_solution(too_long_sequence_solution)
+        lifu_interface.set_solution(too_long_sequence_solution.to_dict())

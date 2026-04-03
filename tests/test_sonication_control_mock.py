@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from openlifu.bf import Pulse, Sequence
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.io.LIFUInterface import LIFUInterface, LIFUInterfaceStatus
 from openlifu.plan.solution import Solution
 
@@ -36,7 +36,7 @@ def test_lifuinterface_mock(example_solution:Solution):
     """Test that LIFUInterface can be used in mock mode (i.e. test_mode=True)"""
     lifu_interface = LIFUInterface(TX_test_mode=True, HV_test_mode=True)
     lifu_interface.txdevice.enum_tx7332_devices(num_devices=2)
-    lifu_interface.set_solution(example_solution)
+    lifu_interface.set_solution(example_solution.to_dict())
     lifu_interface.start_sonication()
     status = lifu_interface.get_status()
     assert status == LIFUInterfaceStatus.STATUS_READY

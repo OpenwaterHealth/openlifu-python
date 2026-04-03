@@ -16,7 +16,8 @@ from vtk import vtkImageData, vtkPolyData
 from openlifu.db import Session, Subject, User
 from openlifu.db.database import Database, OnConflictOpts
 from openlifu.db.session import TransducerTrackingResult
-from openlifu.geo import ArrayTransform, Point
+from openlifu.geo.point import Point
+from openlifu.geo.transforms import ArrayTransform
 from openlifu.nav.photoscan import Photoscan
 from openlifu.plan import Protocol, Run, Solution
 from openlifu.util.volume_conversion import is_dicom_file_or_directory

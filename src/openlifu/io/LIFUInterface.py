@@ -8,12 +8,10 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
-import openlifu
 from openlifu.io.LIFUHVController import HVController
 from openlifu.io.LIFUSignal import LIFUSignal
 from openlifu.io.LIFUTXDevice import TriggerModeOpts, TxDevice
 from openlifu.io.LIFUUart import LIFUUart
-from openlifu.plan.solution import Solution
 
 REF_MAX_SEQUENCE_TIMES = {
     "default": [2*60, 5*60, 10*60],    # users to use default values
@@ -73,8 +71,8 @@ class LIFUInterface:
                  run_async: bool = False,
                  ext_power_supply: bool = False,
                  module_invert: bool | List[bool] = False,
-                 voltage_table_selection: Optional[str] = None,
-                 sequence_time_selection: Optional[str] = None) -> None:
+                 voltage_table_selection: str | None = None,
+                 sequence_time_selection: str | None = None) -> None:
         """
         Initialize the LIFUInterface with given parameters and store them in the class.
 
@@ -192,18 +190,16 @@ class LIFUInterface:
             hv_connected = self.hvcontroller.is_connected()
         return tx_connected, hv_connected
 
-    def get_max_voltage(self, solution: Solution | Dict) -> float:
+    def get_max_voltage(self, solution: Dict) -> float:
         """
         Get the maximum voltage for a given solution.
 
         Args:
-            solution (Solution | Dict): The solution to check.
+            solution (Dict): The solution to check.
 
         Returns:
             float: The maximum voltage for the solution.
         """
-        if isinstance(solution, Solution):
-            solution = solution.to_dict()
 
         sequence_duty_cycle = self.get_sequence_duty_cycle(solution)
         sequence_duration = self.get_sequence_duration(solution)
@@ -239,16 +235,14 @@ class LIFUInterface:
         max_voltage.Description = "This table shows the maximum voltage for different duty cycles and sequence times."
         return max_voltage
 
-    def check_solution(self, solution: Solution | Dict) -> None:
+    def check_solution(self, solution: Dict) -> None:
         """
         Check if the solution is valid.
         Args:
-            solution (Solution | Dict): The solution to check.
+            solution (Dict): The solution to check.
         Raises:
             ValueError: If the solution is invalid.
         """
-        if isinstance(solution, Solution):
-            solution = solution.to_dict()
 
         self.voltage_table = self._resolve_voltage_chart_evt_version(self.voltage_table_selection)
         self.sequence_time = self._resolve_max_sequence_time_set(self.sequence_time_selection)
@@ -268,37 +262,31 @@ class LIFUInterface:
         if solution['voltage'] > max_voltage:
             raise ValueError(f"Voltage ({solution['voltage']:0.1f}V) exceeds maximum allowed voltage ({max_voltage:0.1f}V) for duty cycle ({100*sequence_duty_cycle:0.1f} <= {100*duty_cycles_limits[duty_cycle_index]}%) and sequence time ({sequence_duration:0.0f} <= {duration_limits[duration_index]}s).")
 
-    def get_sequence_duty_cycle(self, solution: Solution | Dict) -> float:
+    def get_sequence_duty_cycle(self, solution: Dict) -> float:
         """
         Get the duty cycle of the sequence in the solution.
 
         Args:
-            solution (Solution | Dict): The solution to check.
+            solution (Dict): The solution to check.
 
         Returns:
             float: The duty cycle of the sequence.
         """
-        if isinstance(solution, Solution):
-            solution = solution.to_dict()
-
         if solution['sequence']['pulse_train_interval'] == 0:
             return solution['pulse']['duration'] / solution['sequence']['pulse_interval']
         else:
             return (solution['pulse']['duration'] * solution['sequence']['pulse_count']) / solution['sequence']['pulse_train_interval']
 
-    def get_sequence_duration(self, solution: Solution | Dict) -> float:
+    def get_sequence_duration(self, solution: Dict) -> float:
         """
         Get the duration of the sequence in the solution.
 
         Args:
-            solution (Solution | Dict): The solution to check.
+            solution (Dict): The solution to check.
 
         Returns:
             float: The duration of the sequence.
         """
-        if isinstance(solution, Solution):
-            solution = solution.to_dict()
-
         if solution['sequence']['pulse_train_interval'] == 0:
             return solution['sequence']['pulse_interval'] * solution['sequence']['pulse_count'] * solution['sequence']['pulse_train_count']
         else:
@@ -309,7 +297,7 @@ class LIFUInterface:
             self.txdevice.set_module_invert(module_invert)
 
     def set_solution(self,
-                     solution: Solution | Dict,
+                     solution: Dict,
                      profile_index:int=1,
                      profile_increment:bool=True,
                      trigger_mode: TriggerModeOpts = "sequence",
@@ -318,15 +306,12 @@ class LIFUInterface:
         Load a solution to the device.
 
         Args:
-            solution (Solution): The solution to load.
+            solution (Dict): The solution to load.
             profile_index (int): The profile index to load the solution to (defaults to 0)
             profile_increment (bool): Increment the profile index
             trigger_mode (TriggerModeOpts): The trigger mode to use (defaults to "sequence")
             module_invert (List[bool]|bool): Invert the signal on all modules (singleton) or specific modules (list) (defaults to False)
         """
-        if isinstance(solution, Solution):
-            solution = solution.to_dict()
-
         self.check_solution(solution)
 
         if "transducer" in solution and solution["transducer"] is not None and "module_invert" in solution["transducer"]:
@@ -478,4 +463,5 @@ class LIFUInterface:
 
     @staticmethod
     def get_sdk_version() -> str:
+        import openlifu
         return openlifu.__version__

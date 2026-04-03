@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from openlifu.bf.focal_patterns import FocalPattern
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 
 
 @dataclass

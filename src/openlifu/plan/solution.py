@@ -14,7 +14,7 @@ import xarray as xa
 
 from openlifu.bf import Pulse, Sequence
 from openlifu.bf.focal_patterns import FocalPattern
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.plan.param_constraint import ParameterConstraint
 from openlifu.plan.solution_analysis import (
     SolutionAnalysis,
@@ -26,7 +26,6 @@ from openlifu.plan.solution_analysis import (
 )
 from openlifu.sim import SimSetup, run_simulation
 from openlifu.util.annotations import OpenLIFUFieldData
-from openlifu.util.checkgpu import gpu_available
 from openlifu.util.json import PYFUSEncoder
 from openlifu.util.units import getunitconversion, rescale_coords, rescale_data_arr
 from openlifu.xdc import Transducer
@@ -156,6 +155,7 @@ class Solution:
         if _force_cpu:
             use_gpu = False
         else:
+            from openlifu.util.checkgpu import gpu_available
             use_gpu = gpu_available()
 
         if sim_options is None:

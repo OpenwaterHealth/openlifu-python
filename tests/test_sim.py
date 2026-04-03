@@ -6,7 +6,7 @@ import pytest
 import xarray
 
 from openlifu.bf import Pulse, Sequence
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.plan import Protocol
 from openlifu.sim import SimSetup, run_simulation
 from openlifu.xdc import Transducer

@@ -24,14 +24,14 @@ from openlifu.bf import (
 )
 from openlifu.bf.apod_methods import Uniform
 from openlifu.bf.delay_methods import Direct
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.plan.param_constraint import ParameterConstraint
 from openlifu.plan.solution import Solution
 from openlifu.plan.solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
 from openlifu.plan.target_constraints import TargetConstraints
-from openlifu.plan.virtual_fit import VirtualFitOptions
 from openlifu.seg import Material, SegmentationMethod
 from openlifu.seg.seg_methods import UniformWater
+from openlifu.seg.virtual_fit import VirtualFitOptions
 from openlifu.sim import SimSetup
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.json import PYFUSEncoder

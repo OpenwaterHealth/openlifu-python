@@ -6,7 +6,6 @@ from openlifu.plan.run import Run
 from openlifu.plan.solution import Solution
 from openlifu.plan.solution_analysis import SolutionAnalysis, SolutionAnalysisOptions
 from openlifu.plan.target_constraints import TargetConstraints
-from openlifu.plan.virtual_fit import run_virtual_fit
 
 __all__ = [
     "Protocol",
