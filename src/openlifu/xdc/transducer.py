@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, List, Literal
 
 import numpy as np
-import vtk
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
@@ -139,6 +138,7 @@ class Transducer:
              transform:np.ndarray | None=None,
              units:str | None=None,
              facecolor=[0,1,1,0.5]):
+        import vtk
         units = self.units if units is None else units
         actor = self.get_actor(units=units, transform=transform, facecolor=facecolor)
         renderWindow = vtk.vtkRenderWindow()
@@ -151,6 +151,7 @@ class Transducer:
         renderWindowInteractor.Start()
 
     def get_actor(self, transform:np.ndarray | None=None, units:str | None=None, facecolor=[0,1,1,0.5]):
+        import vtk
         units = self.units if units is None else units
         polydata = self.get_polydata(units=units, transform=transform, facecolor=facecolor)
         mapper = vtk.vtkPolyDataMapper()
@@ -164,6 +165,7 @@ class Transducer:
         """Get a vtk polydata of the transducer. Optionally provide a transform, and units in which to interpret
         that transform. If a transform is provided with no units specified, it is assumed that the units
         are the same as those of the transducer itself. Optionally provide an RGBA color to set."""
+        import vtk
         units = self.units if units is None else units
         N = self.numelements()
         points = vtk.vtkPoints()
