@@ -54,9 +54,11 @@ db = [
   "pydicom"
 ]
 io = [
+  "base58",
   "crc",
   "crcmod",
-  "pyserial"
+  "pyserial",
+  "openlifu-sdk @ file://C:/Users/pjh7/git/openlifu-sdk"
 ]
 sim = [
   "k-wave-python==0.4.0",
