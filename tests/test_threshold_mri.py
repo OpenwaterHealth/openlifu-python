@@ -298,6 +298,7 @@ def test_classify_brain_degenerate_constant_intensity() -> None:
         classify_brain_tissues=True,
         air_threshold_quantile=0.0,
         skull_thickness_mm=7.0,
+        bias_correction_sigma_mm=0.0,
     )
     result = seg._segment(volume)
     idx = seg._material_indices()
