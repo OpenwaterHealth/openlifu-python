@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -221,6 +222,11 @@ def run_simulation(arr: xdc.Transducer,
             ds_dict['p'] = xa.DataArray(output['p'].reshape([output['Nt'], *sz], order='F'),
                          coords=[pcoords[dim] for dim in ['t','x','y','z']],
                          attrs={'units':'Pa', 'long_name':'Pressure'})
+
+    # clean up temporary files created by k-wave
+    for filename in [simulation_options.input_filename, simulation_options.output_filename]:
+        Path(filename).unlink(missing_ok=True)
+
 
     ds = xa.Dataset(ds_dict)
     if return_kwave_outputs and return_kwave_inputs:
