@@ -97,26 +97,11 @@ docs = [
   "sphinx_autodoc_typehints",
   "furo>=2023.08.17",
 ]
-[dependency-groups]
 all = [
-  "jupyter",
-  "mesh",
-  "db",
-  "io",
-  "sim",
-  "cloud",
-  "photogrammetry",
-  "test",
-  "dev",
-  "docs",
+  "openlifu[jupyter, mesh, db, io, sim, cloud, photogrammetry, test, dev, docs]",
 ]
 app = [
-  "mesh",
-  "db",
-  "io",
-  "sim",
-  "cloud",
-  "photogrammetry",
+  "openlifu[mesh, db, io, sim, cloud, photogrammetry]",
 ]
 
 [project.urls]
