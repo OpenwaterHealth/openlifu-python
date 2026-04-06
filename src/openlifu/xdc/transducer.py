@@ -11,7 +11,7 @@ import vtk
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
-from openlifu.xdc.element import Element
+from openlifu.xdc.element import Element, generate_drive_signal
 
 DIMS = ['x', 'y', 'z']
 LDIMS = Literal['x','y','z']
@@ -87,30 +87,20 @@ class Transducer:
                 raise ValueError("Impulse response timestep must be set if impulse response is set.")
 
 
-    def interp_impulse_response(self, dt=None):
-        if dt is None:
-            dt = self.impulse_dt
-        n0 = len(self.impulse_response)
-        t0 = self.impulse_dt * np.arange(n0)
-        t1 = np.arange(0, t0[-1] + dt, dt)
-        impulse_response = np.interp(t1, t0, self.impulse_response)
-        impulse_t = np.arange(len(impulse_response)) * dt
-        impulse_t = impulse_t - np.mean(impulse_t)
-        return impulse_response, impulse_t
-
-    def calc_output(self, input_signal, dt, delays: np.ndarray = None, apod: np.ndarray = None):
+    def calc_output(self, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None, amplitude: float = 1.0) -> np.ndarray:
         if delays is None:
             delays = np.zeros(self.numelements())
         if apod is None:
             apod = np.ones(self.numelements())
-        if self.impulse_response is None:
-            filtered_input_signal = input_signal * 1
-        else:
-            impulse = self.interp_impulse_response(dt)
-            filtered_input_signal = np.convolve(input_signal, impulse, mode='full')
-        if self.sensitivity is not None:
-            filtered_input_signal = filtered_input_signal * self.sensitivity
-        outputs = [np.concatenate([np.zeros(int(delay/dt)), a*element.calc_output(filtered_input_signal, dt)],axis=0) for element, delay, a, in zip(self.elements, delays, apod)]
+        drive_signal = generate_drive_signal(cycles=cycles, frequency=frequency, dt=dt, amplitude=amplitude)
+        base_output = drive_signal * self.get_sensitivity(frequency)
+        outputs = [
+            np.concatenate(
+                [np.zeros(int(delay / dt)),  a * element.get_sensitivity(frequency) * base_output],
+                axis=0,
+            )
+            for element, delay, a, in zip(self.elements, delays, apod)
+        ]
         max_len = max([len(o) for o in outputs])
         output_signal = np.zeros([self.numelements(), max_len])
         for i, o in enumerate(outputs):

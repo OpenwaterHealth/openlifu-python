@@ -139,7 +139,8 @@ def run_simulation(arr: xdc.Transducer,
     apod = apod if apod is not None else np.ones(arr.numelements())
     kgrid = get_kgrid(params.coords, dt=dt, t_end=t_end, cfl=cfl)
     t = np.arange(0, np.min([cycles / freq, (kgrid.Nt-np.ceil(max(delays)/kgrid.dt))*kgrid.dt]), kgrid.dt)
-    input_signal = amplitude * np.sin(2 * np.pi * freq * t)
+    if cycles/freq > t[-1]:
+        cycles = int(t[-1]*freq)
     units = [params[dim].attrs['units'] for dim in params.dims]
     if not all(unit == units[0] for unit in units):
         raise ValueError("All dimensions must have the same units")
@@ -156,14 +157,15 @@ def run_simulation(arr: xdc.Transducer,
     if _source is not None:
         source = _source
     else:
-        source_mat = arr.calc_output(input_signal, kgrid.dt, delays, apod)
+        source_mat = arr.calc_output(amplitude=amplitude, cycles=cycles, frequency=freq, dt=kgrid.dt, delays=delays, apod=apod)
+        source_mat = source_mat[:, :kgrid.Nt]
     if arr.crosstalk_frac != 0:
         # Simulate crosstalk by adding additional elements to the array for each element that
         #   is within the crosstalk distance, with the signal scaled by the crosstalk fraction.
         #   This is a simple model of crosstalk and may not capture all the complexities of real
         #   crosstalk, but it can be useful for testing and simulation purposes.
-        crosstalk_arr = arr.copy()
-        crosstalk_mat = source_mat
+        #crosstalk_arr = arr.copy()
+        crosstalk_mat = source_mat.copy()
         positions = arr.get_positions(units="m")
         for src_idx in range(arr.numelements()):
             for dst_idx in range(arr.numelements()):
@@ -173,9 +175,10 @@ def run_simulation(arr: xdc.Transducer,
                 dst_pos = np.array(positions[dst_idx])
                 dist = np.linalg.norm(src_pos - dst_pos)
                 if dist <= arr.crosstalk_dist:
-                    crosstalk_arr.elements += [arr.elements[dst_idx].copy()]
-                    crosstalk_mat = np.vstack((crosstalk_mat, arr.crosstalk_frac*source_mat[src_idx,:]))
-        arr = crosstalk_arr
+         #           crosstalk_arr.elements += [arr.elements[dst_idx].copy()]
+                    crosstalk_mat[dst_idx,:] += arr.crosstalk_frac*source_mat[src_idx,:]
+                    #crosstalk_mat = np.vstack((crosstalk_mat, arr.crosstalk_frac*source_mat[src_idx,:]))
+        #arr = crosstalk_arr
         source_mat = crosstalk_mat
     karray = get_karray(arr,
                         translation=array_offset,
