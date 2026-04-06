@@ -9,16 +9,66 @@ import numpy as np
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
 
+SENS_FREQ_KEY = "freq_Hz"
+SENS_VALUE_KEY = "values_Pa_per_V"
 
-def sensitivity_at_frequency(sensitivity: float | dict[float, float], frequency: float) -> float:
+
+def normalize_sensitivity(sensitivity: float | dict) -> float | dict[str, list[float]]:
+    """Normalize sensitivity to a canonical representation.
+
+    Canonical frequency-dependent representation is:
+        {"freq_Hz": [...], "values_Pa_per_V": [...]}
+
+    Backward-compatible legacy representation with frequency keys is accepted and
+    converted to the canonical representation.
+    """
     if isinstance(sensitivity, dict):
-        freqs = np.array(list(sensitivity.keys()), dtype=np.float64)
-        values = np.array(list(sensitivity.values()), dtype=np.float64)
-        return float(np.interp(frequency, freqs, values, left=values[0], right=values[-1]))
+        if SENS_FREQ_KEY in sensitivity or SENS_VALUE_KEY in sensitivity:
+            if SENS_FREQ_KEY not in sensitivity or SENS_VALUE_KEY not in sensitivity:
+                raise ValueError("Sensitivity dictionary must include both 'freq_Hz' and 'values_Pa_per_V'.")
+            freqs = np.asarray(sensitivity[SENS_FREQ_KEY], dtype=np.float64).reshape(-1)
+            values = np.asarray(sensitivity[SENS_VALUE_KEY], dtype=np.float64).reshape(-1)
+        else:
+            # Legacy format: {frequency_hz: sensitivity}
+            if len(sensitivity) == 0:
+                raise ValueError("Sensitivity dictionary must not be empty.")
+            mapping = {float(k): float(v) for k, v in sensitivity.items()}
+            freqs = np.array(list(mapping.keys()), dtype=np.float64)
+            values = np.array(list(mapping.values()), dtype=np.float64)
+
+        if len(freqs) == 0:
+            raise ValueError("Sensitivity frequency list must not be empty.")
+        if len(freqs) != len(values):
+            raise ValueError("Sensitivity frequency and value lists must have the same length.")
+
+        order = np.argsort(freqs)
+        freqs = freqs[order]
+        values = values[order]
+        if np.any(np.diff(freqs) <= 0):
+            raise ValueError("Sensitivity frequencies must be strictly increasing.")
+
+        return {
+            SENS_FREQ_KEY: [float(f) for f in freqs],
+            SENS_VALUE_KEY: [float(v) for v in values],
+        }
+
     return float(sensitivity)
 
 
-def generate_drive_signal(input_signal, cycles: float, frequency: float, dt: float) -> np.ndarray:
+def sensitivity_at_frequency(sensitivity: float | dict, frequency: float) -> float:
+    sensitivity = normalize_sensitivity(sensitivity)
+    if isinstance(sensitivity, dict):
+        if frequency in sensitivity[SENS_FREQ_KEY]:
+            idx = sensitivity[SENS_FREQ_KEY].index(frequency)
+            return float(sensitivity[SENS_VALUE_KEY][idx])
+        else:
+            freqs = np.array(sensitivity[SENS_FREQ_KEY], dtype=np.float64)
+            values = np.array(sensitivity[SENS_VALUE_KEY], dtype=np.float64)
+            return float(np.interp(frequency, freqs, values, left=values[0], right=values[-1]))
+    return float(sensitivity)
+
+
+def generate_drive_signal(cycles: float, frequency: float, dt: float, amplitude: float = 1.0) -> np.ndarray:
     """Generate a drive signal with duration constrained by cycles/frequency."""
     if dt <= 0:
         raise ValueError("dt must be positive.")
@@ -27,14 +77,8 @@ def generate_drive_signal(input_signal, cycles: float, frequency: float, dt: flo
     if cycles <= 0:
         raise ValueError("cycles must be positive.")
     n_samples = max(1, int(np.round(cycles / (frequency * dt))))
-    if np.isscalar(input_signal):
-        t = np.arange(n_samples, dtype=np.float64) * dt
-        return float(input_signal) * np.sin(2 * np.pi * frequency * t)
-    base = np.asarray(input_signal, dtype=np.float64).reshape(-1)
-    drive_signal = np.zeros(n_samples, dtype=np.float64)
-    n_copy = min(n_samples, len(base))
-    drive_signal[:n_copy] = base[:n_copy]
-    return drive_signal
+    t = np.arange(n_samples, dtype=np.float64) * dt
+    return amplitude * np.sin(2 * np.pi * frequency * t)
 
 
 def matrix2xyz(matrix):

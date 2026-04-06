@@ -112,12 +112,12 @@ class Transducer:
     def get_sensitivity(self, frequency: float) -> float:
         return sensitivity_at_frequency(self.sensitivity, frequency)
 
-    def calc_output(self, input_signal, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None):
+    def calc_output(self, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None, amplitude: float = 1.0) -> np.ndarray:
         if delays is None:
             delays = np.zeros(self.numelements())
         if apod is None:
             apod = np.ones(self.numelements())
-        drive_signal = generate_drive_signal(input_signal, cycles=cycles, frequency=frequency, dt=dt)
+        drive_signal = generate_drive_signal(cycles=cycles, frequency=frequency, dt=dt, amplitude=amplitude)
         base_output = drive_signal * self.get_sensitivity(frequency)
         outputs = [
             np.concatenate(
