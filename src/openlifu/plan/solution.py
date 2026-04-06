@@ -256,15 +256,14 @@ class Solution:
             apodization = self.apodizations[focus_index]
             origin = self.transducer.get_effective_origin(apodizations=apodization, units=options.distance_units)
 
-            output_signal_Pa = self.transducer.calc_output(
-                input_signal_V,
-                cycles=self.pulse.duration * self.pulse.frequency,
+            p0_Pa = np.max(self.transducer.calc_output(
+                cycles=1,
                 frequency=self.pulse.frequency,
                 dt=dt,
                 delays=self.delays[focus_index, :],
                 apod=self.apodizations[focus_index, :],
-            )
-            p0_Pa = np.max(output_signal_Pa, axis=1)
+                amplitude=self.pulse.amplitude * self.voltage,
+            ), axis=1)
 
             mainlobe_mask = get_mask(
                 pnp_MPa,
