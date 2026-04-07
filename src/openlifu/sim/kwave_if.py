@@ -141,7 +141,7 @@ def run_simulation(arr: xdc.Transducer,
     kgrid = get_kgrid(params.coords, dt=dt, t_end=t_end, cfl=cfl)
     t = np.arange(0, np.min([cycles / freq, (kgrid.Nt-np.ceil(max(delays)/kgrid.dt))*kgrid.dt]), kgrid.dt)
     if cycles/freq > t[-1]:
-        cycles = int(t[-1]*freq)
+        cycles = np.ceil(t[-1]*freq)
     units = [params[dim].attrs['units'] for dim in params.dims]
     if not all(unit == units[0] for unit in units):
         raise ValueError("All dimensions must have the same units")

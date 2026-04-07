@@ -23,6 +23,15 @@ def get_angle_from_gap(width, gap, roc):
 def get_roc_from_angle(width, gap, dth):
     return (0.5*gap + (0.5 * width * np.cos(dth))) / np.sin(dth)
 
+def get_gap_from_angle(width, dth, roc):
+    a = roc
+    b = width/2
+    mag = np.sqrt(a**2 + b**2)
+    A = a/mag
+    B = b/mag
+    gap = 2*mag*np.sin(dth - np.arcsin(B))
+    return gap if A >= 0 else -gap
+
 @dataclass
 class TransducerArray(DictMixin):
     id: str = "transducer_array"
@@ -84,22 +93,44 @@ class TransducerArray(DictMixin):
             f.write(json_string)
 
     @staticmethod
-    def get_concave_cylinder(trans, rows=1, cols=1, width=40, gap=0, dth=None, roc=np.inf, units="mm", id="transducer_array", name="Transducer Array", attrs: dict={}):
-        scl = getunitconversion(units, trans.units)
+    def get_concave_cylinder(trans, rows=1, cols=1, width=40, gap=None, dth=None, roc=None, units="mm", id="transducer_array", name="Transducer Array", attrs: dict={}):
+
         modules = []
-        if roc == np.inf:
+        if isinstance(trans, Transducer):
+            trans_arr = np.array([[trans]*cols for _ in range(rows)])
+        else:
+            trans_arr = np.array(trans).reshape(rows, cols)
+        scl = getunitconversion(units, trans_arr[0,0].units)
+        if gap is None:
+            if dth is not None and roc is not None:
+                gap = get_gap_from_angle(width, dth, roc)
+            else:
+                gap = 0
+        elif dth is not None and roc is not None:
+            raise ValueError("Invalid combination of parameters: cannot specify all of gap, dth, and roc.")
+
+        if dth is None:
+            if roc is not None:
+                dth = get_angle_from_gap(width, gap, roc)
+            else:
+                dth = 0
+                roc = np.inf
+
+        if roc is None:
+            if np.isclose(dth, 0.0):
+                roc = np.inf
+            else:
+                roc = get_roc_from_angle(width, gap, dth)
+
+        if dth == 0:
             for i in range(rows):
                 y = (width+gap)*(i-(rows-1)/2)*scl
                 for j in range(cols):
                     dx = (width+gap)*(j-(cols-1)/2)*scl
                     M = np.array([[1,0,0,dx], [0,1,0,y], [0,0,1,0], [0,0,0,1]])
-                    trans_new = TransformedTransducer.from_transducer(trans, transform=np.linalg.inv(M))
+                    trans_new = TransformedTransducer.from_transducer(trans_arr[i,j], transform=np.linalg.inv(M))
                     modules.append(trans_new)
         else:
-            if dth is None:
-                dth = get_angle_from_gap(width, gap, roc)
-            elif roc is None and dth is not None and gap is not None:
-                roc = get_roc_from_angle(width, gap, dth)
             for i in range(rows):
                 y = (width+gap)*(i-(rows-1)/2)*scl
                 for j in range(cols):
@@ -110,7 +141,7 @@ class TransducerArray(DictMixin):
                                 [0,1,0,y],
                                 [np.sin(th),0,np.cos(th),z],
                                 [0,0,0,1]])
-                    trans_new = TransformedTransducer.from_transducer(trans, transform=np.linalg.inv(M))
+                    trans_new = TransformedTransducer.from_transducer(trans_arr[i,j], transform=np.linalg.inv(M))
                     modules.append(trans_new)
         return TransducerArray(modules=modules, id=id, name=name, attrs=attrs)
 

@@ -7,6 +7,11 @@ import pytest
 from helpers import dataclasses_are_equal
 
 from openlifu.xdc import Element, Transducer, TransducerArray
+from openlifu.xdc.transducerarray import (
+    get_angle_from_gap,
+    get_gap_from_angle,
+    get_roc_from_angle,
+)
 
 
 @pytest.fixture()
@@ -119,13 +124,21 @@ def test_transducer_calc_output_interpolates_dictionary_sensitivity():
         sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [1.0, 3.0]},
     )
     transducer.elements[0].sensitivity = 1.0
-    input_signal = np.array([1.0, -1.0, 0.5], dtype=float)
+    cycles = 3
+    dt = 1e-7
 
-    output_mid = transducer.calc_output(input_signal, cycles=3, frequency=200e3, dt=1e-7)
-    output_low = transducer.calc_output(input_signal, cycles=3, frequency=100e3, dt=1e-7)
+    output_mid = transducer.calc_output(cycles=cycles, frequency=200e3, dt=dt)
+    output_low = transducer.calc_output(cycles=cycles, frequency=100e3, dt=dt)
 
-    np.testing.assert_allclose(output_mid[0, :len(input_signal)], 2.0 * input_signal)
-    np.testing.assert_allclose(output_low[0, :len(input_signal)], 1.0 * input_signal)
+    n_samples_mid = int(np.round(cycles / (200e3 * dt)))
+    n_samples_low = int(np.round(cycles / (100e3 * dt)))
+    t_mid = np.arange(n_samples_mid) * dt
+    t_low = np.arange(n_samples_low) * dt
+    expected_mid = 2.0 * np.sin(2 * np.pi * 200e3 * t_mid)
+    expected_low = 1.0 * np.sin(2 * np.pi * 100e3 * t_low)
+
+    np.testing.assert_allclose(output_mid[0], expected_mid)
+    np.testing.assert_allclose(output_low[0], expected_low)
 
 
 def test_legacy_sensitivity_mapping_is_normalized_to_schema():
@@ -145,25 +158,25 @@ def test_element_calc_output_generates_signal_from_scalar_input():
     dt = 1e-7
     n_samples = int(np.round(cycles / (frequency * dt)))
 
-    output = element.calc_output(3.0, cycles=cycles, frequency=frequency, dt=dt)
+    output = element.calc_output(cycles=cycles, frequency=frequency, dt=dt, amplitude=3.0)
     t = np.arange(n_samples) * dt
     expected = 2.0 * 3.0 * np.sin(2 * np.pi * frequency * t)
 
     np.testing.assert_allclose(output, expected)
 
 
-def test_element_calc_output_enforces_cycles_duration_for_array_input():
+def test_element_calc_output_enforces_cycles_duration_for_generated_signal():
     element = Element(sensitivity=1.0)
     cycles = 1
     frequency = 200e3
     dt = 1e-6
     n_samples = int(np.round(cycles / (frequency * dt)))
-    input_signal = np.arange(20, dtype=float)
-
-    output = element.calc_output(input_signal, cycles=cycles, frequency=frequency, dt=dt)
+    output = element.calc_output(cycles=cycles, frequency=frequency, dt=dt)
+    t = np.arange(n_samples) * dt
+    expected = np.sin(2 * np.pi * frequency * t)
 
     assert len(output) == n_samples
-    np.testing.assert_allclose(output, input_signal[:n_samples])
+    np.testing.assert_allclose(output, expected)
 
 
 def test_merge_pushes_transducer_sensitivity_into_elements():
@@ -207,3 +220,143 @@ def test_merge_rejects_mismatched_sensitivity_keys():
 
     with pytest.raises(ValueError, match="different frequency keys"):
         Transducer.merge([transducer_a, transducer_b], merge_mismatched_sensitivity=True)
+
+
+@pytest.mark.parametrize(
+    ("width", "dth", "roc"),
+    [
+        (8.0, 0.08, 25.0),
+        (10.0, 0.12, 30.0),
+        (12.0, 0.18, 45.0),
+    ],
+)
+def test_concave_geometry_helpers_are_mutual_inverses(width: float, dth: float, roc: float):
+    gap = get_gap_from_angle(width, dth, roc)
+    recovered_roc = get_roc_from_angle(width, gap, dth)
+    recovered_dth = get_angle_from_gap(width, gap, roc)
+    recovered_gap = get_gap_from_angle(width, recovered_dth, roc)
+
+    assert np.isclose(recovered_roc, roc)
+    assert np.isclose(recovered_dth, dth)
+    assert np.isclose(recovered_gap, gap)
+
+
+def test_get_concave_cylinder_computes_gap_from_dth_and_roc_layout_spacing():
+    base = Transducer.gen_matrix_array(nx=1, ny=1, units="mm")
+    width = 8.0
+    dth = 0.12
+    roc = 25.0
+    array = TransducerArray.get_concave_cylinder(
+        base,
+        rows=2,
+        cols=1,
+        width=width,
+        dth=dth,
+        roc=roc,
+        units="mm",
+    )
+    merged = array.to_transducer()
+    positions = merged.get_positions(units="mm")
+
+    expected_gap = get_gap_from_angle(width, dth, roc)
+    y_spacing = np.abs(positions[1, 1] - positions[0, 1])
+
+    assert np.isclose(y_spacing, width + expected_gap)
+
+
+def test_get_concave_cylinder_handles_zero_dth_without_roc():
+    base = Transducer.gen_matrix_array(nx=1, ny=1, units="mm")
+    width = 10.0
+    gap = 2.0
+    array = TransducerArray.get_concave_cylinder(
+        base,
+        rows=1,
+        cols=2,
+        width=width,
+        gap=gap,
+        dth=0.0,
+        units="mm",
+    )
+    merged = array.to_transducer()
+    positions = merged.get_positions(units="mm")
+
+    x_spacing = np.abs(positions[1, 0] - positions[0, 0])
+    z_values = positions[:, 2]
+
+    assert np.isclose(x_spacing, width + gap)
+    np.testing.assert_allclose(z_values, np.zeros_like(z_values))
+
+
+def test_get_concave_cylinder_rejects_gap_dth_roc_together():
+    base = Transducer.gen_matrix_array(nx=1, ny=1, units="mm")
+    with pytest.raises(ValueError, match="cannot specify all of gap, dth, and roc"):
+        TransducerArray.get_concave_cylinder(
+            base,
+            rows=1,
+            cols=2,
+            width=10.0,
+            gap=1.0,
+            dth=0.2,
+            roc=20.0,
+            units="mm",
+        )
+
+
+def test_transducer_calc_output_combines_frequency_dependent_sensitivities():
+    transducer = Transducer.gen_matrix_array(
+        nx=1,
+        ny=1,
+        units="mm",
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+    )
+    transducer.elements[0].sensitivity = {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [5.0, 9.0]}
+
+    frequency = 200e3
+    dt = 1e-7
+    cycles = 3
+    n_samples = int(np.round(cycles / (frequency * dt)))
+    t = np.arange(n_samples) * dt
+    expected_drive = np.sin(2 * np.pi * frequency * t)
+
+    output = transducer.calc_output(cycles=cycles, frequency=frequency, dt=dt)
+
+    np.testing.assert_allclose(output[0], 21.0 * expected_drive)
+
+
+def test_transducer_array_to_transducer_preserves_frequency_dependent_sensitivities():
+    transducer_a = Transducer.gen_matrix_array(
+        nx=1,
+        ny=1,
+        units="mm",
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+    )
+    transducer_b = Transducer.gen_matrix_array(
+        nx=1,
+        ny=1,
+        units="mm",
+        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [1.0, 3.0]},
+    )
+    transducer_a.elements[0].sensitivity = 5.0
+    transducer_b.elements[0].sensitivity = 7.0
+
+    array = TransducerArray.get_concave_cylinder(
+        [transducer_a, transducer_b],
+        rows=1,
+        cols=2,
+        width=10.0,
+        gap=0.0,
+        units="mm",
+    )
+    merged = array.to_transducer()
+
+    frequency = 200e3
+    dt = 1e-7
+    cycles = 2
+    n_samples = int(np.round(cycles / (frequency * dt)))
+    t = np.arange(n_samples) * dt
+    expected_drive = np.sin(2 * np.pi * frequency * t)
+
+    output = merged.calc_output(cycles=cycles, frequency=frequency, dt=dt)
+
+    np.testing.assert_allclose(output[0], 15.0 * expected_drive)
+    np.testing.assert_allclose(output[1], 14.0 * expected_drive)
