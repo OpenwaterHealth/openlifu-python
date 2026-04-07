@@ -15,5 +15,4 @@ __all__ = [
     "SolutionAnalysisOptions",
     "TargetConstraints",
     "ParameterConstraint",
-    "run_virtual_fit"
 ]
