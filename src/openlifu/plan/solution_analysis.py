@@ -621,16 +621,16 @@ def model_tx_temperature_rise(voltage: float,
     T0 = T0_degC
 
     if T0 < 20 or T0 > 40:
-        logger.warning("Initial temperature T0 must be between 20 and 40 degrees Celsius for the model to be valid.")
+        logger.debug(f"Initial temperature T0 ({T0} °C) must be between 20 and 40 degrees Celsius for the thermal prediction model to be valid.")
 
-    if P < 50 or P > 500:
-        logger.warning("Squared Voltage must be between 50 and 500 V^2 for the model to be valid.")
+    if P < 5 or P > 500:
+        logger.debug(f"Average Squared Voltage ({P} V^2) must be between 5 and 500 V^2 for the thermal prediction model to be valid.")
 
     if t < 1 or t > 600:
-        logger.warning("Time t must be between 1 and 600 seconds for the model to be valid.")
+        logger.debug(f"Time ({t} seconds) must be between 1 and 600 seconds for the thermal prediction model to be valid.")
 
     if frequency_kHz < 380 or frequency_kHz > 420:
-        logger.warning("Frequency must be between 380 and 420 kHz for the model to be valid.")
+        logger.debug(f"Frequency ({frequency_kHz} kHz) must be between 380 and 420 kHz for the thermal prediction model to be valid.")
 
     # Predict power law parameters using polynomial regression (degree 2)
     n = (2.131832 + -0.003475*P + -0.044916*T0 +
