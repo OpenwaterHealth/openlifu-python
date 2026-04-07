@@ -204,9 +204,9 @@ class Element:
     def get_sensitivity(self, frequency: float) -> float:
         return sensitivity_at_frequency(self.sensitivity, frequency)
 
-    def calc_output(self, input_signal, cycles: float, frequency: float, dt: float):
-        drive_signal = generate_drive_signal(input_signal, cycles=cycles, frequency=frequency, dt=dt)
-        return drive_signal * self.get_sensitivity(frequency)
+    def calc_output(self, cycles: float, frequency: float, dt: float, amplitude: float = 1.0) -> np.ndarray:
+        drive_signal = generate_drive_signal(cycles=cycles, frequency=frequency, dt=dt)
+        return drive_signal * self.get_sensitivity(frequency) * amplitude
 
     def copy(self):
         return copy.deepcopy(self)
