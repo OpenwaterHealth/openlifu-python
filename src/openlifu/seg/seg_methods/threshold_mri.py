@@ -93,14 +93,8 @@ class ThresholdMRI(SegmentationMethod):
     is labeled as a single "tissue" material. The segmentation assigns four
     tissue types: water, skull, tissue, and air. When True, the brain
     interior is split into CSF, gray matter, and white matter using a
-    3-component Gaussian Mixture Model (EM-GMM) on T1-weighted intensity,
-    with optional spatial regularization. Two regularization modes are
-    available: Markov Random Field (MRF) via Iterated Conditional Modes
-    (ICM) when ``mrf_beta > 0``, or Gaussian smoothing of posterior
-    probability maps when ``spatial_sigma_mm > 0``. Both are disabled by
-    default. MRF regularization preserves tissue boundaries better than
-    Gaussian smoothing by penalizing label disagreement among 6-connected
-    neighbors without blurring probability maps. This yields a total of six assigned tissue types:
+    3-component Gaussian Mixture Model (EM-GMM) on T1-weighted intensity.
+    This yields a total of six assigned tissue types:
     water, skull, csf, gray_matter, white_matter, and air. Additional
     materials in the dict (e.g. standoff) are carried through but not
     assigned by the segmentation algorithm.
@@ -146,7 +140,7 @@ class ThresholdMRI(SegmentationMethod):
         OpenLIFUFieldData(
             "Classify brain tissues",
             "If True, classify brain interior into CSF, gray matter, and white matter "
-            "using a spatially-regularized EM-GMM on T1-weighted intensity",
+            "using an EM-GMM on T1-weighted intensity",
         ),
     ] = False
     """If True, sub-classify brain interior into CSF, gray matter, and white matter."""
@@ -172,38 +166,6 @@ class ThresholdMRI(SegmentationMethod):
     ] = True
     """If True, use SimpleITK N4BiasFieldCorrection for bias correction.
     Falls back to homomorphic if SimpleITK is not available."""
-
-    spatial_sigma_mm: Annotated[
-        float,
-        OpenLIFUFieldData(
-            "Spatial regularization sigma (mm)",
-            "Gaussian smoothing sigma for spatial regularization of brain tissue "
-            "probability maps. Set to 0 to disable. Only used when classify_brain_tissues is True "
-            "and mrf_beta is 0.",
-        ),
-    ] = 0.0
-    """Gaussian smoothing sigma (mm) for spatial regularization.
-    Defaults to 0 (disabled). Non-zero values apply masked Gaussian
-    smoothing to posterior probability maps before label assignment.
-    Smoothing is confined to the parenchyma mask to prevent boundary leakage.
-    Ignored when mrf_beta > 0 (MRF regularization takes precedence)."""
-
-    mrf_beta: Annotated[
-        float,
-        OpenLIFUFieldData(
-            "MRF regularization strength",
-            "Markov Random Field regularization parameter (beta) for brain tissue "
-            "classification. Controls the penalty for label disagreement among "
-            "6-connected neighbors via Iterated Conditional Modes (ICM). "
-            "Set to 0 to disable MRF and fall back to Gaussian smoothing. "
-            "Typical values are 0.1-0.3. Only used when classify_brain_tissues is True.",
-        ),
-    ] = 0.0
-    """MRF regularization strength (beta).
-    Defaults to 0 (disabled). When positive, Iterated Conditional Modes (ICM) is used
-    for spatial regularization instead of Gaussian smoothing. Higher values
-    produce smoother label maps but may over-regularize thin structures.
-    Set to 0 to disable MRF and use Gaussian smoothing (spatial_sigma_mm) instead."""
 
     brain_extraction_margin_mm: Annotated[
         float,
@@ -272,12 +234,6 @@ class ThresholdMRI(SegmentationMethod):
             raise ValueError(msg)
         if self.bias_correction_sigma_mm < 0:
             msg = f"bias_correction_sigma_mm must be non-negative, got {self.bias_correction_sigma_mm}."
-            raise ValueError(msg)
-        if self.spatial_sigma_mm < 0:
-            msg = f"spatial_sigma_mm must be non-negative, got {self.spatial_sigma_mm}."
-            raise ValueError(msg)
-        if self.mrf_beta < 0:
-            msg = f"mrf_beta must be non-negative, got {self.mrf_beta}."
             raise ValueError(msg)
         if self.brain_extraction_margin_mm < 0:
             msg = f"brain_extraction_margin_mm must be non-negative, got {self.brain_extraction_margin_mm}."
@@ -745,59 +701,6 @@ class ThresholdMRI(SegmentationMethod):
         order = np.argsort(means)
         return means[order], stds[order], weights[order]
 
-    @staticmethod
-    def _icm_iteration(
-        seg_arr: np.ndarray,
-        log_likelihoods: np.ndarray,
-        parenchyma_mask: np.ndarray,
-        label_indices: list[int],
-        beta: float,
-    ) -> np.ndarray:
-        """One pass of Iterated Conditional Modes (ICM) for MRF regularization.
-
-        For each voxel in the parenchyma mask, computes a posterior that
-        combines the GMM log-likelihood with a spatial prior that counts
-        how many of the 6-connected (face) neighbors share the same label.
-        The voxel is assigned to the class that maximizes this posterior.
-
-        Uses vectorized numpy operations (np.roll along each axis) rather
-        than per-voxel loops for performance.
-
-        :param seg_arr: Current integer label array (modified in-place)
-        :param log_likelihoods: Log-likelihood for each class, shape (n_classes, *vol_shape)
-        :param parenchyma_mask: Boolean mask restricting ICM updates
-        :param label_indices: Integer label values for each class (same order as log_likelihoods)
-        :param beta: MRF regularization strength
-        :returns: Updated seg_arr (same object, modified in-place)
-        """
-        n_classes = log_likelihoods.shape[0]
-
-        # For each class k, count how many of the 6 face-neighbors share
-        # label k. np.roll wraps at boundaries, but boundary voxels are
-        # typically outside the parenchyma mask and do not affect the result.
-        neighbor_agreement = np.zeros(
-            (n_classes, *seg_arr.shape), dtype=np.float32
-        )
-        for k, label_val in enumerate(label_indices):
-            same_label = (seg_arr == label_val).astype(np.float32)
-            agreement = np.zeros_like(same_label)
-            for axis in range(3):
-                agreement += np.roll(same_label, 1, axis=axis)
-                agreement += np.roll(same_label, -1, axis=axis)
-            neighbor_agreement[k] = agreement  # Range 0..6
-
-        # Posterior = log_likelihood + beta * neighbor_agreement.
-        # Higher agreement means more neighbors share this label, which is
-        # rewarded. This is equivalent to penalizing disagreement.
-        posterior = log_likelihoods + beta * neighbor_agreement
-
-        # Assign each voxel to the class with the highest posterior.
-        best_class = np.argmax(posterior, axis=0)
-        for k, label_val in enumerate(label_indices):
-            seg_arr[parenchyma_mask & (best_class == k)] = label_val
-
-        return seg_arr
-
     def _classify_brain(
         self,
         data: np.ndarray,
@@ -811,9 +714,9 @@ class ThresholdMRI(SegmentationMethod):
 
         Modifies ``seg`` in-place. Optionally applies bias field correction,
         then fits a 3-component Gaussian Mixture Model (EM-GMM) to the
-        (possibly tighter) GMM parenchyma mask. Posterior probability maps are
-        spatially smoothed with a Gaussian kernel for regularization, and the
-        process is iterated twice to refine the classification.
+        (possibly tighter) GMM parenchyma mask. Labels are assigned via
+        argmax of the posterior probabilities, iterated twice to refine
+        the GMM parameters.
 
         After GMM classification within the tight mask, labels are expanded
         to cover the full parenchyma mask via nearest-neighbor assignment
@@ -845,7 +748,7 @@ class ThresholdMRI(SegmentationMethod):
 
         try:
             self._classify_brain_gmm(
-                classify_data, gmm_parenchyma_mask, seg, material_idx, spacing
+                classify_data, gmm_parenchyma_mask, seg, material_idx
             )
         except (RuntimeError, ValueError, np.linalg.LinAlgError):
             logging.warning(
@@ -875,19 +778,12 @@ class ThresholdMRI(SegmentationMethod):
         parenchyma_mask: np.ndarray,
         seg: np.ndarray,
         material_idx: dict[str, int],
-        spacing: np.ndarray,
     ) -> None:
-        """Core GMM classification with spatial regularization.
+        """Core GMM classification.
 
-        Fits a 3-component GMM, computes full-volume log-likelihood maps,
-        then applies spatial regularization. When ``mrf_beta > 0``, uses
-        Markov Random Field regularization via Iterated Conditional Modes
-        (ICM), which penalizes label disagreement among 6-connected
-        neighbors while preserving tissue boundaries. When ``mrf_beta == 0``
-        and ``spatial_sigma_mm > 0``, falls back to Gaussian smoothing of
-        posterior probability maps. The outer loop iterates twice: after
-        each regularization pass, GMM parameters are re-estimated from the
-        current labels/posteriors.
+        Fits a 3-component GMM to parenchyma voxel intensities, computes
+        posterior probabilities, assigns labels via argmax, then iterates
+        twice to refine GMM parameters from the current assignment.
 
         Called by ``_classify_brain``; raises on failure so the caller can
         apply the gray-matter fallback.
@@ -896,15 +792,11 @@ class ThresholdMRI(SegmentationMethod):
         :param parenchyma_mask: Boolean mask of brain parenchyma
         :param seg: Integer label array to modify in-place
         :param material_idx: Mapping from material name to integer label
-        :param spacing: Voxel spacing in mm per axis
         """
-        use_mrf = self.mrf_beta > 0
-        sigma_voxels = self.spatial_sigma_mm / spacing
         label_keys = ["csf", "gray_matter", "white_matter"]  # sorted by T1 mean
         label_indices = [material_idx[k] for k in label_keys]
         n_components = len(label_keys)
-        n_outer = 2  # total spatial-regularization iterations
-        n_icm = 5  # ICM iterations per outer loop (when using MRF)
+        n_outer = 2
 
         # Extract parenchyma intensities for the initial fit.
         parenchyma_vals = classify_data[parenchyma_mask]
@@ -923,144 +815,49 @@ class ThresholdMRI(SegmentationMethod):
         # Precompute constant for inline logpdf (avoids scipy overhead).
         _LOG_2PI_HALF = 0.5 * np.log(2.0 * np.pi)
 
-        # Determine whether we need full 3D probability maps.
-        # MRF needs 3D log-likelihoods for ICM; Gaussian smoothing needs 3D
-        # prob_maps for the convolution. When neither is active, we can
-        # compute likelihoods only at parenchyma voxels (flat arrays).
-        needs_3d = use_mrf or self.spatial_sigma_mm > 0
-
         for _iteration in range(n_outer):
             safe_stds = np.maximum(stds, 1e-10)
             log_weights = np.log(weights + 1e-300)
 
-            if needs_3d:
-                # Build full-volume log-likelihood maps (only inside parenchyma).
-                log_likelihoods = np.full(
-                    (n_components, *classify_data.shape), -np.inf, dtype=np.float64
-                )
-                prob_maps = np.zeros(
-                    (n_components, *classify_data.shape), dtype=np.float64
-                )
-                for k in range(n_components):
-                    z = (classify_data - means[k]) / safe_stds[k]
-                    log_prob = (
-                        -0.5 * z * z
-                        - np.log(safe_stds[k])
-                        - _LOG_2PI_HALF
-                        + log_weights[k]
-                    )
-                    log_likelihoods[k][parenchyma_mask] = log_prob[parenchyma_mask]
-                    prob_maps[k] = np.exp(log_prob)
-                    # Zero out non-parenchyma to avoid leakage.
-                    prob_maps[k][~parenchyma_mask] = 0.0
-            else:
-                # Fast path: compute likelihoods only at parenchyma voxels.
-                # shapes: parenchyma_vals = (M,), means = (K,)
-                z_flat = (parenchyma_vals[None, :] - means[:, None]) / safe_stds[:, None]
-                log_ll_flat = (
-                    -0.5 * z_flat * z_flat
-                    - np.log(safe_stds[:, None])
-                    - _LOG_2PI_HALF
-                    + log_weights[:, None]
-                )
-                prob_flat = np.exp(log_ll_flat)
+            # Compute likelihoods only at parenchyma voxels (flat arrays).
+            z_flat = (parenchyma_vals[None, :] - means[:, None]) / safe_stds[:, None]
+            log_ll_flat = (
+                -0.5 * z_flat * z_flat
+                - np.log(safe_stds[:, None])
+                - _LOG_2PI_HALF
+                + log_weights[:, None]
+            )
+            prob_flat = np.exp(log_ll_flat)
 
-            if use_mrf:
-                # MRF regularization via ICM.
-                # Initialize seg labels from the argmax of the raw likelihoods
-                # (only within the parenchyma mask) before ICM iterations.
-                init_labels = np.argmax(
-                    log_likelihoods[:, parenchyma_mask], axis=0
-                )
-                for k, label_val in enumerate(label_indices):
-                    mask_k = parenchyma_mask.copy()
-                    mask_k[parenchyma_mask] = init_labels == k
-                    seg[mask_k] = label_val
+            # Normalize posteriors.
+            prob_sum_flat = np.sum(prob_flat, axis=0)
+            prob_sum_flat[prob_sum_flat < 1e-300] = 1e-300
+            prob_flat /= prob_sum_flat
 
-                # Run ICM iterations to refine labels using spatial context.
-                for _icm_iter in range(n_icm):
-                    self._icm_iteration(
-                        seg, log_likelihoods, parenchyma_mask,
-                        label_indices, self.mrf_beta,
-                    )
-
-                # Build soft responsibilities from the final labels for
-                # GMM re-estimation. Use the normalized likelihoods (posteriors)
-                # so the M-step is consistent with the E-step.
-                prob_sum = np.sum(prob_maps, axis=0)
-                prob_sum[prob_sum < 1e-300] = 1e-300
-                for k in range(n_components):
-                    prob_maps[k] /= prob_sum
-
-                # Extract labels from seg for final output.
-                labels_3d = np.zeros(int(np.sum(parenchyma_mask)), dtype=int)
-                for k, label_val in enumerate(label_indices):
-                    labels_3d[seg[parenchyma_mask] == label_val] = k
-
-            elif self.spatial_sigma_mm > 0:
-                # Gaussian smoothing regularization path.
-                mask_float = parenchyma_mask.astype(np.float64)
-                smoothed_mask = gaussian_filter(mask_float, sigma=sigma_voxels)
-                safe = parenchyma_mask & (smoothed_mask > 1e-6)
-                for k in range(n_components):
-                    smoothed_prob = gaussian_filter(
-                        prob_maps[k] * mask_float, sigma=sigma_voxels
-                    )
-                    result = np.zeros_like(prob_maps[k])
-                    result[safe] = smoothed_prob[safe] / smoothed_mask[safe]
-                    prob_maps[k] = result
-
-                # Normalize posteriors within parenchyma.
-                prob_sum = np.sum(prob_maps, axis=0)
-                prob_sum[prob_sum < 1e-300] = 1e-300
-                for k in range(n_components):
-                    prob_maps[k] /= prob_sum
-
-                # Assign labels via argmax of smoothed posteriors.
-                labels_3d = np.argmax(prob_maps[:, parenchyma_mask], axis=0)
-
-            else:
-                # No spatial regularization: work entirely with flat arrays.
-                # Normalize posteriors at parenchyma voxels only.
-                prob_sum_flat = np.sum(prob_flat, axis=0)
-                prob_sum_flat[prob_sum_flat < 1e-300] = 1e-300
-                for k in range(n_components):
-                    prob_flat[k] /= prob_sum_flat
-
-                # Assign labels via argmax of posteriors.
-                labels_3d = np.argmax(prob_flat, axis=0)
-
-            # Re-estimate GMM parameters from the current soft assignment
-            # (for the next iteration). Use the posteriors as weights.
-            parenchyma_intensities = classify_data[parenchyma_mask]
+            # Re-estimate GMM parameters from the current soft assignment.
             new_means = np.empty(n_components)
             new_stds = np.empty(n_components)
             new_weights = np.empty(n_components)
             for k in range(n_components):
-                if needs_3d:
-                    resp_k = prob_maps[k][parenchyma_mask]
-                else:
-                    resp_k = prob_flat[k]
+                resp_k = prob_flat[k]
                 nk = np.sum(resp_k)
                 if nk < 1e-10:
                     new_means[k] = means[k]
                     new_stds[k] = stds[k]
                     new_weights[k] = weights[k]
                     continue
-                new_means[k] = np.dot(resp_k, parenchyma_intensities) / nk
-                diff = parenchyma_intensities - new_means[k]
+                new_means[k] = np.dot(resp_k, parenchyma_vals) / nk
+                diff = parenchyma_vals - new_means[k]
                 new_stds[k] = np.sqrt(np.dot(resp_k, diff * diff) / nk)
                 new_stds[k] = max(new_stds[k], 1e-10)
-                new_weights[k] = nk / len(parenchyma_intensities)
+                new_weights[k] = nk / len(parenchyma_vals)
 
             means, stds, weights = new_means, new_stds, new_weights
 
-        # Write final labels into seg. Components are sorted by mean:
-        # index 0 = CSF (lowest), 1 = gray matter, 2 = white matter (highest).
-        for k, key in enumerate(label_keys):
-            voxel_mask = parenchyma_mask.copy()
-            voxel_mask[parenchyma_mask] = labels_3d == k
-            seg[voxel_mask] = material_idx[key]
+        # Assign final labels from the last iteration's posteriors.
+        # Components are sorted by mean: 0=CSF, 1=gray matter, 2=white matter.
+        labels_flat = np.argmax(prob_flat, axis=0)
+        seg[parenchyma_mask] = np.array(label_indices)[labels_flat]
 
     def to_table(self) -> pd.DataFrame:
         """
@@ -1075,8 +872,6 @@ class ThresholdMRI(SegmentationMethod):
             {"Name": "Classify Brain Tissues", "Value": self.classify_brain_tissues, "Unit": ""},
             {"Name": "Bias Correction Sigma", "Value": self.bias_correction_sigma_mm, "Unit": "mm"},
             {"Name": "Use N4", "Value": self.use_n4, "Unit": ""},
-            {"Name": "Spatial Regularization Sigma", "Value": self.spatial_sigma_mm, "Unit": "mm"},
-            {"Name": "MRF Beta", "Value": self.mrf_beta, "Unit": ""},
             {"Name": "Brain Extraction Margin", "Value": self.brain_extraction_margin_mm, "Unit": "mm"},
             {"Name": "Refine Skull Intensity", "Value": self.refine_skull_intensity, "Unit": ""},
             {"Name": "Reference Material", "Value": self.ref_material, "Unit": ""},

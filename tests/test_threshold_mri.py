@@ -247,10 +247,10 @@ def test_spacing_aware_skull_thickness() -> None:
 def test_classify_brain_three_tissues() -> None:
     """Verify that the three-tissue sphere produces all expected labels:
     center should be WM, and CSF, GM, WM, skull, and water should all be present.
-    Spatial smoothing is disabled so that the thin CSF shell (only 2-3 voxels
-    thick after skull erosion) is not absorbed by adjacent gray matter."""
+    The thin CSF shell (only 2-3 voxels thick after skull erosion) must be
+    preserved and not absorbed by adjacent gray matter."""
     volume = create_three_tissue_sphere()
-    seg = ThresholdMRI(classify_brain_tissues=True, air_threshold_quantile=0.0, spatial_sigma_mm=0.0, mrf_beta=0.0, skull_thickness_mm=7.0, brain_extraction_margin_mm=0.0)
+    seg = ThresholdMRI(classify_brain_tissues=True, air_threshold_quantile=0.0, skull_thickness_mm=7.0, brain_extraction_margin_mm=0.0)
     result = seg._segment(volume)
     idx = seg._material_indices()
 
@@ -337,8 +337,6 @@ def test_gmm_preserves_natural_class_proportions() -> None:
         classify_brain_tissues=True,
         air_threshold_quantile=0.0,
         bias_correction_sigma_mm=0.0,
-        spatial_sigma_mm=0.0,
-        mrf_beta=0.0,
         skull_thickness_mm=skull_thickness,
         brain_extraction_margin_mm=0.0,
     )
@@ -402,143 +400,4 @@ def test_gmm_preserves_natural_class_proportions() -> None:
     assert not all(abs(f - 1.0 / 3.0) < 0.05 for f in fracs), (
         f"All three fractions are near 33% ({fracs}), suggesting forced "
         "equal partitioning rather than natural class proportions"
-    )
-
-
-def test_spatial_sigma_disables_smoothing_when_zero() -> None:
-    """With spatial_sigma_mm=0, no spatial regularization is applied. The
-    labels should be a direct per-voxel GMM classification without smoothing."""
-    shape = (64, 64, 64)
-    x = np.arange(64) * 1.0 - 31.5
-    zz, yy, xx = np.meshgrid(x, x, x, indexing="ij")
-    dist = np.sqrt(xx**2 + yy**2 + zz**2)
-
-    # Add noise to create noisy boundaries that smoothing would clean up
-    rng = np.random.default_rng(42)
-    noise = rng.normal(0, 8, shape)
-    data = np.zeros(shape)
-    head = dist <= 25.0
-    data[head] = 30.0 + noise[head]
-    data[dist <= 25.0 * 0.7] = 70.0 + noise[dist <= 25.0 * 0.7]
-    data[dist <= 25.0 * 0.5] = 100.0 + noise[dist <= 25.0 * 0.5]
-    data = np.clip(data, 0, None)
-
-    volume = xa.DataArray(data, dims=["z", "y", "x"], coords={"z": x, "y": x, "x": x})
-
-    seg_no_smooth = ThresholdMRI(
-        classify_brain_tissues=True,
-        air_threshold_quantile=0.0,
-        bias_correction_sigma_mm=0.0,
-        spatial_sigma_mm=0.0,
-        mrf_beta=0.0,
-        skull_thickness_mm=7.0,
-    )
-    result_no_smooth = seg_no_smooth._segment(volume)
-
-    seg_smooth = ThresholdMRI(
-        classify_brain_tissues=True,
-        air_threshold_quantile=0.0,
-        bias_correction_sigma_mm=0.0,
-        spatial_sigma_mm=1.0,
-        mrf_beta=0.0,
-        skull_thickness_mm=7.0,
-    )
-    result_smooth = seg_smooth._segment(volume)
-
-    idx = seg_no_smooth._material_indices()
-    brain_labels = [idx["csf"], idx["gray_matter"], idx["white_matter"]]
-
-    # Unsmoothed should produce all three brain labels
-    for label_name in ("csf", "gray_matter", "white_matter"):
-        assert np.any(result_no_smooth.to_numpy() == idx[label_name]), (
-            f"{label_name} missing from unsmoothed result"
-        )
-
-    # Smoothed should produce at least two brain labels (thin CSF shell may
-    # be absorbed by adjacent GM with stronger smoothing on small phantoms)
-    smoothed_brain_count = sum(
-        1 for lbl in brain_labels if np.any(result_smooth.to_numpy() == lbl)
-    )
-    assert smoothed_brain_count >= 2, (
-        "Smoothed result should contain at least 2 distinct brain tissue labels"
-    )
-
-    # Measure label-boundary roughness: count voxels where the label differs
-    # from at least one of its 6-connected neighbors (within brain voxels only).
-    def count_boundary_voxels(seg_arr: np.ndarray) -> int:
-        brain_mask = np.isin(seg_arr, brain_labels)
-        boundary = np.zeros_like(brain_mask)
-        for axis in range(3):
-            shifted_fwd = np.roll(seg_arr, 1, axis=axis)
-            shifted_bwd = np.roll(seg_arr, -1, axis=axis)
-            boundary |= (seg_arr != shifted_fwd) & brain_mask
-            boundary |= (seg_arr != shifted_bwd) & brain_mask
-        return int(np.sum(boundary))
-
-    boundaries_no_smooth = count_boundary_voxels(result_no_smooth.to_numpy())
-    boundaries_smooth = count_boundary_voxels(result_smooth.to_numpy())
-
-    # Spatial smoothing should reduce boundary voxels (smoother label maps).
-    assert boundaries_smooth < boundaries_no_smooth, (
-        f"Smoothed result ({boundaries_smooth} boundary voxels) should have "
-        f"fewer boundary voxels than unsmoothed ({boundaries_no_smooth})"
-    )
-
-
-def test_spatial_sigma_positive_produces_smoother_labels() -> None:
-    """Increasing spatial_sigma_mm should monotonically reduce label noise.
-    Compare sigma=1 vs sigma=5 on a noisy phantom."""
-    shape = (64, 64, 64)
-    x = np.arange(64) * 1.0 - 31.5
-    zz, yy, xx = np.meshgrid(x, x, x, indexing="ij")
-    dist = np.sqrt(xx**2 + yy**2 + zz**2)
-
-    rng = np.random.default_rng(99)
-    noise = rng.normal(0, 10, shape)
-    data = np.zeros(shape)
-    head = dist <= 25.0
-    data[head] = 30.0 + noise[head]
-    data[dist <= 25.0 * 0.7] = 70.0 + noise[dist <= 25.0 * 0.7]
-    data[dist <= 25.0 * 0.5] = 100.0 + noise[dist <= 25.0 * 0.5]
-    data = np.clip(data, 0, None)
-
-    volume = xa.DataArray(data, dims=["z", "y", "x"], coords={"z": x, "y": x, "x": x})
-
-    def count_label_transitions(seg_arr: np.ndarray, brain_label_set: list[int]) -> int:
-        brain_mask = np.isin(seg_arr, brain_label_set)
-        transitions = 0
-        for axis in range(3):
-            shifted = np.roll(seg_arr, 1, axis=axis)
-            transitions += int(np.sum((seg_arr != shifted) & brain_mask))
-        return transitions
-
-    seg_small = ThresholdMRI(
-        classify_brain_tissues=True,
-        air_threshold_quantile=0.0,
-        bias_correction_sigma_mm=0.0,
-        spatial_sigma_mm=1.0,
-        mrf_beta=0.0,
-        skull_thickness_mm=7.0,
-    )
-    seg_large = ThresholdMRI(
-        classify_brain_tissues=True,
-        air_threshold_quantile=0.0,
-        bias_correction_sigma_mm=0.0,
-        spatial_sigma_mm=5.0,
-        mrf_beta=0.0,
-        skull_thickness_mm=7.0,
-    )
-
-    result_small = seg_small._segment(volume)
-    result_large = seg_large._segment(volume)
-
-    idx = seg_small._material_indices()
-    brain_labels = [idx["csf"], idx["gray_matter"], idx["white_matter"]]
-
-    trans_small = count_label_transitions(result_small.to_numpy(), brain_labels)
-    trans_large = count_label_transitions(result_large.to_numpy(), brain_labels)
-
-    assert trans_large < trans_small, (
-        f"Larger sigma ({trans_large} transitions) should produce fewer "
-        f"label transitions than smaller sigma ({trans_small})"
     )
