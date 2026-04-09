@@ -2,68 +2,23 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Annotated
+from typing import Annotated, List
 
 import numpy as np
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
 
-SENS_FREQ_KEY = "freq_Hz"
-SENS_VALUE_KEY = "values_Pa_per_V"
 
-
-def normalize_sensitivity(sensitivity: float | dict) -> float | dict[str, list[float]]:
-    """Normalize sensitivity to a canonical representation.
-
-    Canonical frequency-dependent representation is:
-        {"freq_Hz": [...], "values_Pa_per_V": [...]}
-
-    Backward-compatible legacy representation with frequency keys is accepted and
-    converted to the canonical representation.
-    """
-    if isinstance(sensitivity, dict):
-        if SENS_FREQ_KEY in sensitivity or SENS_VALUE_KEY in sensitivity:
-            if SENS_FREQ_KEY not in sensitivity or SENS_VALUE_KEY not in sensitivity:
-                raise ValueError("Sensitivity dictionary must include both 'freq_Hz' and 'values_Pa_per_V'.")
-            freqs = np.asarray(sensitivity[SENS_FREQ_KEY], dtype=np.float64).reshape(-1)
-            values = np.asarray(sensitivity[SENS_VALUE_KEY], dtype=np.float64).reshape(-1)
+def sensitivity_at_frequency(sensitivity: float | List[tuple[float, float]], frequency: float) -> float:
+    if isinstance(sensitivity, list):
+        freqs, values = zip(*sensitivity)
+        freqs = np.array(freqs, dtype=np.float64)
+        values = np.array(values, dtype=np.float64)
+        if frequency in freqs:
+            idx = np.where(freqs == frequency)[0][0]
+            return float(values[idx])
         else:
-            # Legacy format: {frequency_hz: sensitivity}
-            if len(sensitivity) == 0:
-                raise ValueError("Sensitivity dictionary must not be empty.")
-            mapping = {float(k): float(v) for k, v in sensitivity.items()}
-            freqs = np.array(list(mapping.keys()), dtype=np.float64)
-            values = np.array(list(mapping.values()), dtype=np.float64)
-
-        if len(freqs) == 0:
-            raise ValueError("Sensitivity frequency list must not be empty.")
-        if len(freqs) != len(values):
-            raise ValueError("Sensitivity frequency and value lists must have the same length.")
-
-        order = np.argsort(freqs)
-        freqs = freqs[order]
-        values = values[order]
-        if np.any(np.diff(freqs) <= 0):
-            raise ValueError("Sensitivity frequencies must be strictly increasing.")
-
-        return {
-            SENS_FREQ_KEY: [float(f) for f in freqs],
-            SENS_VALUE_KEY: [float(v) for v in values],
-        }
-
-    return float(sensitivity)
-
-
-def sensitivity_at_frequency(sensitivity: float | dict, frequency: float) -> float:
-    sensitivity = normalize_sensitivity(sensitivity)
-    if isinstance(sensitivity, dict):
-        if frequency in sensitivity[SENS_FREQ_KEY]:
-            idx = sensitivity[SENS_FREQ_KEY].index(frequency)
-            return float(sensitivity[SENS_VALUE_KEY][idx])
-        else:
-            freqs = np.array(sensitivity[SENS_FREQ_KEY], dtype=np.float64)
-            values = np.array(sensitivity[SENS_VALUE_KEY], dtype=np.float64)
             return float(np.interp(frequency, freqs, values, left=values[0], right=values[-1]))
     return float(sensitivity)
 
@@ -114,7 +69,7 @@ class Element:
     size: Annotated[np.ndarray, OpenLIFUFieldData("Size", "Size of the element in 2D")] = field(default_factory=lambda: np.array([1., 1.]))
     """ Size of the element in 2D as a numpy array [width, length]."""
 
-    sensitivity: Annotated[float | dict, OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or {'freq_Hz':[...], 'values_Pa_per_V':[...]}")] = 1.0
+    sensitivity: Annotated[float | List[tuple[float, float]], OpenLIFUFieldData("Sensitivity", "Sensitivity of the element (Pa/V), scalar or list of (frequency, value) tuples")] = 1.0
     """Sensitivity of the element (Pa/V)"""
 
     pin: Annotated[int, OpenLIFUFieldData("Pin", "Channel pin to which the element is connected")] = -1
@@ -135,7 +90,8 @@ class Element:
             raise ValueError("Size must be a 2-element array.")
         if self.sensitivity is None:
             self.sensitivity = 1.0
-        self.sensitivity = normalize_sensitivity(self.sensitivity)
+        elif isinstance(self.sensitivity, list):
+            self.sensitivity = [(float(f), float(v)) for f, v in self.sensitivity]
 
     @property
     def x(self):

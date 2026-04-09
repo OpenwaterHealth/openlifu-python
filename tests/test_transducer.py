@@ -121,7 +121,7 @@ def test_transducer_calc_output_interpolates_dictionary_sensitivity():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [1.0, 3.0]},
+        sensitivity=[(100e3, 1.0), (300e3, 3.0)],
     )
     transducer.elements[0].sensitivity = 1.0
     cycles = 3
@@ -139,16 +139,6 @@ def test_transducer_calc_output_interpolates_dictionary_sensitivity():
 
     np.testing.assert_allclose(output_mid[0], expected_mid)
     np.testing.assert_allclose(output_low[0], expected_low)
-
-
-def test_legacy_sensitivity_mapping_is_normalized_to_schema():
-    transducer = Transducer(
-        sensitivity={"100000.0": 1.0, "300000.0": 3.0},
-    )
-    assert transducer.sensitivity == {
-        "freq_Hz": [100000.0, 300000.0],
-        "values_Pa_per_V": [1.0, 3.0],
-    }
 
 
 def test_element_calc_output_generates_signal_from_scalar_input():
@@ -184,13 +174,13 @@ def test_merge_pushes_transducer_sensitivity_into_elements():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
     )
     transducer_b = Transducer.gen_matrix_array(
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [3.0, 6.0]},
+        sensitivity=[(100e3, 3.0), (300e3, 6.0)],
     )
     transducer_a.elements[0].sensitivity = 5.0
     transducer_b.elements[0].sensitivity = 7.0
@@ -198,8 +188,8 @@ def test_merge_pushes_transducer_sensitivity_into_elements():
     merged = Transducer.merge([transducer_a, transducer_b], merge_mismatched_sensitivity=True)
 
     assert merged.sensitivity == 1.0
-    assert merged.elements[0].sensitivity == {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [10.0, 20.0]}
-    assert merged.elements[1].sensitivity == {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [21.0, 42.0]}
+    assert merged.elements[0].sensitivity == [(100e3, 10.0),(300e3, 20.0)]
+    assert merged.elements[1].sensitivity == [(100e3, 21.0),(300e3, 42.0)]
 
 
 def test_merge_rejects_mismatched_sensitivity_keys():
@@ -207,16 +197,16 @@ def test_merge_rejects_mismatched_sensitivity_keys():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
     )
     transducer_b = Transducer.gen_matrix_array(
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 400e3], "values_Pa_per_V": [3.0, 6.0]},
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
     )
-    transducer_a.elements[0].sensitivity = {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [5.0, 7.0]}
-    transducer_b.elements[0].sensitivity = {"freq_Hz": [100e3, 400e3], "values_Pa_per_V": [11.0, 13.0]}
+    transducer_a.elements[0].sensitivity = [(100e3, 5.0), (300e3, 7.0)]
+    transducer_b.elements[0].sensitivity = [(100e3, 11.0), (400e3, 13.0)]
 
     with pytest.raises(ValueError, match="different frequency keys"):
         Transducer.merge([transducer_a, transducer_b], merge_mismatched_sensitivity=True)
@@ -307,9 +297,9 @@ def test_transducer_calc_output_combines_frequency_dependent_sensitivities():
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
     )
-    transducer.elements[0].sensitivity = {"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [5.0, 9.0]}
+    transducer.elements[0].sensitivity = [(100e3, 5.0), (300e3, 9.0)]
 
     frequency = 200e3
     dt = 1e-7
@@ -328,13 +318,13 @@ def test_transducer_array_to_transducer_preserves_frequency_dependent_sensitivit
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [2.0, 4.0]},
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
     )
     transducer_b = Transducer.gen_matrix_array(
         nx=1,
         ny=1,
         units="mm",
-        sensitivity={"freq_Hz": [100e3, 300e3], "values_Pa_per_V": [1.0, 3.0]},
+        sensitivity=[(100e3, 1.0), (300e3, 3.0)],
     )
     transducer_a.elements[0].sensitivity = 5.0
     transducer_b.elements[0].sensitivity = 7.0
@@ -360,3 +350,48 @@ def test_transducer_array_to_transducer_preserves_frequency_dependent_sensitivit
 
     np.testing.assert_allclose(output[0], 15.0 * expected_drive)
     np.testing.assert_allclose(output[1], 14.0 * expected_drive)
+
+
+def test_element_sensitivity_from_json_is_list_of_tuples():
+    """Sensitivity read from a JSON dict (list-of-lists) is converted to List[tuple[float, float]]."""
+    d = {
+        "index": 1,
+        "position": [0.0, 0.0, 0.0],
+        "orientation": [0.0, 0.0, 0.0],
+        "size": [1.0, 1.0],
+        "pin": 1,
+        "units": "mm",
+        "sensitivity": [[100e3, 1.0], [300e3, 3.0]],  # JSON encodes tuples as lists
+    }
+    element = Element.from_dict(d)
+    assert isinstance(element.sensitivity, list)
+    assert all(isinstance(pair, tuple) for pair in element.sensitivity)
+    assert all(isinstance(f, float) and isinstance(v, float) for f, v in element.sensitivity)
+    assert element.sensitivity == [(100e3, 1.0), (300e3, 3.0)]
+
+
+def test_transducer_sensitivity_from_json_is_list_of_tuples():
+    """Transducer-level sensitivity survives a to_json/from_json round-trip as List[tuple[float, float]]."""
+    transducer = Transducer.gen_matrix_array(
+        nx=1,
+        ny=1,
+        units="mm",
+        sensitivity=[(100e3, 2.0), (300e3, 4.0)],
+    )
+    reconstructed = Transducer.from_json(transducer.to_json())
+    assert isinstance(reconstructed.sensitivity, list)
+    assert all(isinstance(pair, tuple) for pair in reconstructed.sensitivity)
+    assert all(isinstance(f, float) and isinstance(v, float) for f, v in reconstructed.sensitivity)
+    assert reconstructed.sensitivity == [(100e3, 2.0), (300e3, 4.0)]
+
+
+def test_element_in_transducer_sensitivity_from_json_is_list_of_tuples():
+    """Element-level sensitivity inside a Transducer survives a to_json/from_json round-trip as List[tuple[float, float]]."""
+    transducer = Transducer.gen_matrix_array(nx=1, ny=1, units="mm")
+    transducer.elements[0].sensitivity = [(100e3, 5.0), (300e3, 9.0)]
+    reconstructed = Transducer.from_json(transducer.to_json())
+    el_sensitivity = reconstructed.elements[0].sensitivity
+    assert isinstance(el_sensitivity, list)
+    assert all(isinstance(pair, tuple) for pair in el_sensitivity)
+    assert all(isinstance(f, float) and isinstance(v, float) for f, v in el_sensitivity)
+    assert el_sensitivity == [(100e3, 5.0), (300e3, 9.0)]

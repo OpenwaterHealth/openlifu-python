@@ -14,7 +14,6 @@ from openlifu.util.units import getunitconversion
 from openlifu.xdc.element import (
     Element,
     generate_drive_signal,
-    normalize_sensitivity,
     sensitivity_at_frequency,
 )
 
@@ -23,38 +22,28 @@ LDIMS = Literal['x','y','z']
 
 
 def _combine_sensitivities(
-    base_sensitivity: float | dict,
-    scale_sensitivity: float | dict,
-) -> float | dict[str, list[float]]:
-    base_sensitivity = normalize_sensitivity(base_sensitivity)
-    scale_sensitivity = normalize_sensitivity(scale_sensitivity)
+    base_sensitivity: float | List[tuple[float, float]],
+    scale_sensitivity: float | List[tuple[float, float]],
+) -> float | List[tuple[float, float]]:
 
-    if isinstance(base_sensitivity, dict) and isinstance(scale_sensitivity, dict):
-        base_freqs = np.asarray(base_sensitivity["freq_Hz"], dtype=np.float64)
-        scale_freqs = np.asarray(scale_sensitivity["freq_Hz"], dtype=np.float64)
+    if isinstance(base_sensitivity, list) and isinstance(scale_sensitivity, list):
+        base_freqs = np.asarray([f for f, _ in base_sensitivity], dtype=np.float64)
+        scale_freqs = np.asarray([f for f, _ in scale_sensitivity], dtype=np.float64)
         if not np.array_equal(base_freqs, scale_freqs):
             raise ValueError("Cannot combine sensitivity dictionaries with different frequency keys.")
-        base_values = np.asarray(base_sensitivity["values_Pa_per_V"], dtype=np.float64)
-        scale_values = np.asarray(scale_sensitivity["values_Pa_per_V"], dtype=np.float64)
-        return {
-            "freq_Hz": [float(f) for f in base_freqs],
-            "values_Pa_per_V": [float(v) for v in (base_values * scale_values)],
-        }
-    if isinstance(base_sensitivity, dict):
+        base_values = np.asarray([v for _, v in base_sensitivity], dtype=np.float64)
+        scale_values = np.asarray([v for _, v in scale_sensitivity], dtype=np.float64)
+        return [(float(f), float(v)) for f, v in zip(base_freqs, base_values * scale_values)]
+    elif isinstance(base_sensitivity, list):
         factor = float(scale_sensitivity)
-        values = np.asarray(base_sensitivity["values_Pa_per_V"], dtype=np.float64)
-        return {
-            "freq_Hz": [float(f) for f in base_sensitivity["freq_Hz"]],
-            "values_Pa_per_V": [float(v) for v in (values * factor)],
-        }
-    if isinstance(scale_sensitivity, dict):
+        values = np.asarray([v for _, v in base_sensitivity], dtype=np.float64)
+        return [(float(f), float(v)) for (f, _), v in zip(base_sensitivity, values * factor)]
+    elif isinstance(scale_sensitivity, list):
         factor = float(base_sensitivity)
-        values = np.asarray(scale_sensitivity["values_Pa_per_V"], dtype=np.float64)
-        return {
-            "freq_Hz": [float(f) for f in scale_sensitivity["freq_Hz"]],
-            "values_Pa_per_V": [float(v) for v in (factor * values)],
-        }
-    return float(base_sensitivity) * float(scale_sensitivity)
+        values = np.asarray([v for _, v in scale_sensitivity], dtype=np.float64)
+        return [(float(f), float(v)) for (f, _), v in zip(scale_sensitivity, factor * values)]
+    else:
+        return float(base_sensitivity) * float(scale_sensitivity)
 
 @dataclass
 class Transducer:
@@ -95,8 +84,8 @@ class Transducer:
     The units of this transform are assumed to be the native units of the transducer, the `Transducer.units` field.
     """
 
-    sensitivity: Annotated[float | dict, OpenLIFUFieldData("Sensitivity", "Sensitivity of the transducer (Pa/V), scalar or {'freq_Hz':[...], 'values_Pa_per_V':[...]}")] = 1.0
-    """Sensitivity of the transducer (Pa/V), scalar or frequency-dependent dictionary."""
+    sensitivity: Annotated[float | List[tuple[float, float]], OpenLIFUFieldData("Sensitivity", "Sensitivity of the transducer (Pa/V), scalar or list of (frequency, value) tuples")] = 1.0
+    """Sensitivity of the transducer (Pa/V), scalar or frequency-dependent list of tuples."""
 
     crosstalk_frac: Annotated[float, OpenLIFUFieldData("Crosstalk fraction", "Fraction of the signal that leaks into other elements due to crosstalk")] = 0.0
     """Fraction of the signal that leaks into other elements due to crosstalk"""
@@ -115,10 +104,8 @@ class Transducer:
             element.rescale(self.units)
         if self.sensitivity is None:
             self.sensitivity = 1.0
-        self.sensitivity = normalize_sensitivity(self.sensitivity)
-
-    def get_sensitivity(self, frequency: float) -> float:
-        return sensitivity_at_frequency(self.sensitivity, frequency)
+        elif isinstance(self.sensitivity, list):
+            self.sensitivity = [(float(f), float(v)) for f, v in self.sensitivity]
 
     def calc_output(self, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None, amplitude: float = 1.0) -> np.ndarray:
         if delays is None:
@@ -126,10 +113,10 @@ class Transducer:
         if apod is None:
             apod = np.ones(self.numelements())
         drive_signal = generate_drive_signal(cycles=cycles, frequency=frequency, dt=dt, amplitude=amplitude)
-        base_output = drive_signal * self.get_sensitivity(frequency)
+        base_output = drive_signal * sensitivity_at_frequency(self.sensitivity, frequency)
         outputs = [
             np.concatenate(
-                [np.zeros(int(delay / dt)), a * element.get_sensitivity(frequency) * base_output],
+                [np.zeros(int(delay / dt)), a * sensitivity_at_frequency(element.sensitivity, frequency) * base_output],
                 axis=0,
             )
             for element, delay, a, in zip(self.elements, delays, apod)
@@ -260,22 +247,20 @@ class Transducer:
         array_copies = [arr.copy() for arr in list_of_transducers]
         dict_key_sets = set()
         for array in array_copies:
-            array.sensitivity = normalize_sensitivity(array.sensitivity)
-            if isinstance(array.sensitivity, dict):
-                dict_key_sets.add(tuple(array.sensitivity["freq_Hz"]))
+            if isinstance(array.sensitivity, list):
+                dict_key_sets.add(tuple(f for f, _ in array.sensitivity))
             for el in array.elements:
-                el.sensitivity = normalize_sensitivity(el.sensitivity)
-                if isinstance(el.sensitivity, dict):
-                    dict_key_sets.add(tuple(el.sensitivity["freq_Hz"]))
+                if isinstance(el.sensitivity, list):
+                    dict_key_sets.add(tuple(f for f, _ in el.sensitivity))
         if len(dict_key_sets) > 1:
             raise ValueError("Cannot merge sensitivities with different frequency keys.")
 
         sensitivity_signatures = []
         for array in array_copies:
-            if isinstance(array.sensitivity, dict):
+            if isinstance(array.sensitivity, list):
                 sensitivity_signatures.append((
-                    tuple(array.sensitivity["freq_Hz"]),
-                    tuple(array.sensitivity["values_Pa_per_V"]),
+                    tuple(f for f, _ in array.sensitivity),
+                    tuple(v for _, v in array.sensitivity),
                 ))
             else:
                 sensitivity_signatures.append(float(array.sensitivity))
