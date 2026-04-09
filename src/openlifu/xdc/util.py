@@ -300,10 +300,7 @@ def report_to_matrix_dict(report_df: pd.DataFrame, focal_gain_lut=FOCAL_GAIN_LUT
     freq_df["Frequency"] = freq_df['Item'].apply(lambda x: float(re.search(r"(?<=^PNP \()\d+(?= kHz\)$)", x).group(0)))
     freq_df['focal_gain'] = freq_df['Frequency'].apply(lambda f: focal_gain_lut.interp(f0=f*1e3, crosstalk=matrix_dict['crosstalk_frac']).item())
     freq_df['Sensitivity'] = freq_df['PNP'].astype(float)*1e6/freq_df['focal_gain']/voltage
-    matrix_dict['sensitivity'] = {
-        'freq_Hz': [float(f * 1e3) for f in freq_df["Frequency"]],
-        'values_Pa_per_V': [float(sens) for sens in freq_df['Sensitivity']],
-    }
+    matrix_dict['sensitivity'] = [(f*1e3, sens) for f, sens in zip(freq_df["Frequency"], freq_df['Sensitivity'])]
     matrix_dict['id'] = matrix_dict['id'].format(sn=sn.lower())
     matrix_dict['name'] = matrix_dict['name'].format(sn=sn)
     return matrix_dict
