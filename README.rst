@@ -65,12 +65,12 @@ Ubuntu
 
 Download and Extract
 ^^^^^^^^^^^^^^^^^^^^
-1. Download Meshroom 2023.3.0 for Linux from `<https://github.com/alicevision/Meshroom/releases/tag/v2023.3.0>`_.
+1. Download Meshroom 2025.1.0 for Linux from `<https://github.com/alicevision/Meshroom/releases/tag/v2025.1.0>`_.
 2. Extract the downloaded archive:
 
    .. code:: bash
 
-      tar -xvf Meshroom-2023.3.0.tar.gz
+      tar -xvf Meshroom-2025.1.0-Linux.tar.gz
 
 Add Meshroom to PATH
 ^^^^^^^^^^^^^^^^^^^^
@@ -98,7 +98,7 @@ Windows
 Download and Extract
 ^^^^^^^^^^^^^^^^^^^^
 
-1. Download Meshroom 2023.3.0 for Windows from `<https://github.com/alicevision/Meshroom/releases/tag/v2023.3.0>`_.
+1. Download Meshroom 2025.1.0 for Windows from `<https://github.com/alicevision/Meshroom/releases/tag/v2025.1.0>`_.
 2. Extract the downloaded archive to a directory of your choice.
 
 Add Meshroom to PATH
