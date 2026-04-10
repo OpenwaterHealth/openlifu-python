@@ -422,15 +422,17 @@ def run_reconstruction(
     durations["ImageResizing"] = time.perf_counter() - start_time
 
     output_dir = temp_dir / "output"
-    cache_dir = temp_dir / "cache"
+    # Meshroom 2025 ignores --cache and writes to MeshroomCache inside the working directory
+    cache_dir = temp_dir / "MeshroomCache"
     pair_file_path = cache_dir / "imageMatches.txt"
 
+    project_file = temp_dir / "project.mg"
     command = [
         "meshroom_batch",
         "--pipeline", pipeline.as_posix(),
         "--output", output_dir.as_posix(),
         "--input", images_dir.as_posix(),
-        "--cache", cache_dir.as_posix(),
+        "--save", project_file.as_posix(),
         "--paramOverrides", f"FeatureMatching_1.imagePairsList={pair_file_path.as_posix()}",
     ]
 
@@ -445,7 +447,7 @@ def run_reconstruction(
 
     #run CameraInit node to set view ids
     progress_callback(8, "Initializing camera IDs")
-    command_camera_init = [*command.copy(), "--toNode", "CameraInit"]
+    command_camera_init = [*command.copy(), "--toNode", "CameraInit_1"]
     subprocess_stream_output(command_camera_init, logger_meshroom.info, logger_meshroom.warning)
 
     camera_init_path = next(cache_dir.glob("CameraInit/*/cameraInit.sfm"))
