@@ -58,7 +58,7 @@ Dev mode
 Installing Meshroom
 -------------------
 
-If you are using ``openlifu.nav.photoscan`` to reconstruct meshes from photo collections, then you will need to set up **Meshroom 2023.3.0**.
+If you are using ``openlifu.nav.photoscan`` to reconstruct meshes from photo collections, then you will need to set up **Meshroom 2025.1.0**.
 
 Ubuntu
 ~~~~~~
@@ -80,7 +80,7 @@ Run:
 
 .. code:: bash
 
-   export PATH="<path-to-meshroom>/Meshroom-2023.3.0:$PATH"
+   export PATH="<path-to-meshroom>/Meshroom-2025.1.0-Linux:$PATH"
 
 Replace ``<path-to-meshroom>`` with the actual path where Meshroom was extracted.
 
@@ -89,7 +89,7 @@ For Bash users:
 
 .. code:: bash
 
-   echo 'export PATH="<path-to-meshroom>/Meshroom-2023.3.0:$PATH"' >> ~/.bashrc
+   echo 'export PATH="<path-to-meshroom>/Meshroom-2025.1.0-Linux:$PATH"' >> ~/.bashrc
    source ~/.bashrc
 
 Windows
