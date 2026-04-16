@@ -58,19 +58,19 @@ Dev mode
 Installing Meshroom
 -------------------
 
-If you are using ``openlifu.nav.photoscan`` to reconstruct meshes from photo collections, then you will need to set up **Meshroom 2023.3.0**.
+If you are using ``openlifu.nav.photoscan`` to reconstruct meshes from photo collections, then you will need to set up **Meshroom 2025.1.0**.
 
 Ubuntu
 ~~~~~~
 
 Download and Extract
 ^^^^^^^^^^^^^^^^^^^^
-1. Download Meshroom 2023.3.0 for Linux from `<https://github.com/alicevision/Meshroom/releases/tag/v2023.3.0>`_.
+1. Download Meshroom 2025.1.0 for Linux from `<https://github.com/alicevision/Meshroom/releases/tag/v2025.1.0>`_.
 2. Extract the downloaded archive:
 
    .. code:: bash
 
-      tar -xvf Meshroom-2023.3.0.tar.gz
+      tar -xvf Meshroom-2025.1.0-Linux.tar.gz
 
 Add Meshroom to PATH
 ^^^^^^^^^^^^^^^^^^^^
@@ -80,7 +80,7 @@ Run:
 
 .. code:: bash
 
-   export PATH="<path-to-meshroom>/Meshroom-2023.3.0:$PATH"
+   export PATH="<path-to-meshroom>/Meshroom-2025.1.0-Linux:$PATH"
 
 Replace ``<path-to-meshroom>`` with the actual path where Meshroom was extracted.
 
@@ -89,7 +89,7 @@ For Bash users:
 
 .. code:: bash
 
-   echo 'export PATH="<path-to-meshroom>/Meshroom-2023.3.0:$PATH"' >> ~/.bashrc
+   echo 'export PATH="<path-to-meshroom>/Meshroom-2025.1.0-Linux:$PATH"' >> ~/.bashrc
    source ~/.bashrc
 
 Windows
@@ -98,7 +98,7 @@ Windows
 Download and Extract
 ^^^^^^^^^^^^^^^^^^^^
 
-1. Download Meshroom 2023.3.0 for Windows from `<https://github.com/alicevision/Meshroom/releases/tag/v2023.3.0>`_.
+1. Download Meshroom 2025.1.0 for Windows from `<https://github.com/alicevision/Meshroom/releases/tag/v2025.1.0>`_.
 2. Extract the downloaded archive to a directory of your choice.
 
 Add Meshroom to PATH
