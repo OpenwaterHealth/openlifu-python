@@ -33,7 +33,7 @@ dependencies = [
   "numpy<2",
   "pandas",
   "scipy",
-  "watchdog"
+  "requests",
 ]
 
 [project.optional-dependencies]
@@ -58,14 +58,13 @@ io = [
   "crc",
   "crcmod",
   "pyserial",
-  "openlifu-sdk>=1.0.2"
+  "openlifu-sdk>=1.0.4"
 ]
 sim = [
   "k-wave-python==0.4.0",
   "nvidia-ml-py"
 ]
 cloud = [
-  "requests",
   "watchdog",
   "python-socketio[client]"
 ]
@@ -79,11 +78,6 @@ photogrammetry = [
   "Pillow",
   "OpenEXR"
 ]
-test = [
-  "pytest >=6",
-  "pytest-cov >=3",
-  "pytest-mock",
-]
 dev = [
   "pytest >=6",
   "pytest-cov >=3",
@@ -96,6 +90,12 @@ docs = [
   "sphinx_copybutton",
   "sphinx_autodoc_typehints",
   "furo>=2023.08.17",
+]
+test = [
+  "openlifu[mesh, db, io, sim, cloud, photogrammetry]",
+  "pytest >=6",
+  "pytest-cov >=3",
+  "pytest-mock",
 ]
 all = [
   "openlifu[jupyter, mesh, db, io, sim, cloud, photogrammetry, test, dev, docs]",
@@ -114,9 +114,6 @@ Changelog = "https://github.com/OpenwaterHealth/OpenLIFU-python/releases"
 [tool.hatch]
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/openlifu/_version.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.envs.default]
 features = ["test"]
