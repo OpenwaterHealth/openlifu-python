@@ -11,6 +11,7 @@ from openlifu.util.units import getunitconversion
 
 
 def sensitivity_at_frequency(sensitivity: float | List[tuple[float, float]], frequency: float) -> float:
+    """Return sensitivity at `frequency`; list form assumes frequencies are sorted ascending."""
     if isinstance(sensitivity, list):
         freqs, values = zip(*sensitivity)
         return float(np.interp(frequency, freqs, values))
@@ -85,7 +86,7 @@ class Element:
         if self.sensitivity is None:
             self.sensitivity = 1.0
         elif isinstance(self.sensitivity, list):
-            self.sensitivity = [(float(f), float(v)) for f, v in self.sensitivity]
+            self.sensitivity = sorted(((float(f), float(v)) for f, v in self.sensitivity), key=lambda t: t[0])
 
     @property
     def x(self):
