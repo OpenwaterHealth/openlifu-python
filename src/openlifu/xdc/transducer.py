@@ -105,7 +105,7 @@ class Transducer:
         if self.sensitivity is None:
             self.sensitivity = 1.0
         elif isinstance(self.sensitivity, list):
-            self.sensitivity = [(float(f), float(v)) for f, v in self.sensitivity]
+            self.sensitivity = sorted(((float(f), float(v)) for f, v in self.sensitivity), key=lambda t: t[0])
 
     def calc_output(self, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None, amplitude: float = 1.0) -> np.ndarray:
         if delays is None:
