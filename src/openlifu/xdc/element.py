@@ -13,13 +13,7 @@ from openlifu.util.units import getunitconversion
 def sensitivity_at_frequency(sensitivity: float | List[tuple[float, float]], frequency: float) -> float:
     if isinstance(sensitivity, list):
         freqs, values = zip(*sensitivity)
-        freqs = np.array(freqs, dtype=np.float64)
-        values = np.array(values, dtype=np.float64)
-        if frequency in freqs:
-            idx = np.where(freqs == frequency)[0][0]
-            return float(values[idx])
-        else:
-            return float(np.interp(frequency, freqs, values, left=values[0], right=values[-1]))
+        return float(np.interp(frequency, freqs, values))
     return float(sensitivity)
 
 
