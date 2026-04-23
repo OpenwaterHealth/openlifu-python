@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.3
+#       jupytext_version: 1.19.1
 #   kernelspec:
 #     display_name: env (3.11.4)
 #     language: python
@@ -34,9 +34,7 @@
 # %%
 # Let's start by importing the necessary classes.
 from __future__ import annotations
-
 import numpy as np
-
 from openlifu.bf import Pulse, Sequence, focal_patterns
 from openlifu.geo import Point
 from openlifu.plan import Protocol

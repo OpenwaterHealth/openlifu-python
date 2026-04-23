@@ -7,7 +7,7 @@ from typing import Annotated
 import pandas as pd
 
 from openlifu.bf import focal_patterns
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunittype
 

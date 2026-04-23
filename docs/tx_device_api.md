@@ -13,8 +13,8 @@ backend.
 ## Initialization
 
 ```python
-from openlifu.io.LIFUTXDevice import TxDevice
-from openlifu.io.LIFUInterface import LIFUInterface
+from openlifu_sdk.io.LIFUTXDevice import TxDevice
+from openlifu_sdk.io.LIFUInterface import LIFUInterface
 
 interface = LIFUInterface(TX_test_mode=False)
 tx_connected, hv_connected = interface.is_device_connected()

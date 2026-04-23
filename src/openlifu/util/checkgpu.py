@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pynvml import nvmlDeviceGetCount, nvmlInit, nvmlShutdown
-
 
 def gpu_available() -> bool:
     """Check the system for an nvidia gpu and return whether one is available."""
+    from pynvml import nvmlDeviceGetCount, nvmlInit, nvmlShutdown
     try:
         nvmlInit()
         device_count = nvmlDeviceGetCount()

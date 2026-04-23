@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from helpers import dataclasses_are_equal
 
-from openlifu import Sequence
+from openlifu.bf import Sequence
 
 
 def test_dict_undict_sequence():

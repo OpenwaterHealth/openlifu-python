@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from openlifu.bf.focal_patterns import FocalPattern
-from openlifu.geo import Point
+from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
 
 
