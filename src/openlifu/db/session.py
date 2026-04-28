@@ -9,7 +9,8 @@ from typing import Annotated, Dict, List, Tuple
 
 import numpy as np
 
-from openlifu.geo import ArrayTransform, Point
+from openlifu.geo.point import Point
+from openlifu.geo.transforms import ArrayTransform
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.json import PYFUSEncoder
 from openlifu.util.strings import sanitize

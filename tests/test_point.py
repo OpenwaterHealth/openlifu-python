@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from helpers import dataclasses_are_equal
 
-from openlifu import Point
+from openlifu.geo.point import Point
 
 
 @pytest.fixture()

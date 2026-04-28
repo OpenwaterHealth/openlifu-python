@@ -31,35 +31,52 @@ dynamic = ["version"]
 dependencies = [
   "xarray[io]",
   "numpy<2",
-  "matplotlib",
   "pandas",
   "scipy",
-  "vtk",
-  "h5py",
-  "opencv-contrib-python",
-  "crc",
-  "nibabel",
-  "sphinx",
-  "ipykernel",
-  "pyserial",
-  "crcmod",
-  "k-wave-python==0.4.0",
-  "nvidia-ml-py",
-  "OpenEXR",
-  "scikit-image",
-  "trimesh",
-  "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
-  "onnxruntime==1.18.0",
-  "pydicom",
-  "watchdog",
-  "python-socketio[client]"
+  "requests",
 ]
 
 [project.optional-dependencies]
-test = [
-  "pytest >=6",
-  "pytest-cov >=3",
-  "pytest-mock",
+jupyter = [
+  "ipykernel",
+  "matplotlib",
+]
+mesh = [
+  "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
+  "trimesh",
+  "scikit-image",
+  "vtk",
+  "Pillow",
+  "OpenEXR"
+]
+db = [
+  "nibabel",
+  "pydicom"
+]
+io = [
+  "base58",
+  "crc",
+  "crcmod",
+  "pyserial",
+  "openlifu-sdk>=1.0.6"
+]
+sim = [
+  "k-wave-python==0.4.0",
+  "nvidia-ml-py"
+]
+cloud = [
+  "watchdog",
+  "python-socketio[client]"
+]
+photogrammetry = [
+  "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
+  "opencv-contrib-python",
+  "onnxruntime==1.18.0",
+  "trimesh",
+  "scikit-image",
+  "vtk",
+  "Pillow",
+  "OpenEXR"
 ]
 dev = [
   "pytest >=6",
@@ -73,6 +90,18 @@ docs = [
   "sphinx_copybutton",
   "sphinx_autodoc_typehints",
   "furo>=2023.08.17",
+]
+test = [
+  "openlifu[mesh, db, io, sim, cloud, photogrammetry]",
+  "pytest >=6",
+  "pytest-cov >=3",
+  "pytest-mock",
+]
+all = [
+  "openlifu[jupyter, mesh, db, io, sim, cloud, photogrammetry, test, dev, docs]",
+]
+app = [
+  "openlifu[mesh, db, io, sim, cloud, photogrammetry]",
 ]
 
 [project.urls]
