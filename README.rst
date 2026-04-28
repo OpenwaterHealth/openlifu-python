@@ -121,37 +121,22 @@ To ensure Meshroom uses your NVIDIA GPU:
 5. Under **Select the preferred graphics processor for this program**, choose **High-performance NVIDIA processor**.
 6. Click **Apply**.
 
-Version control of database using DVC (Data Version Control)
--------------------------------------------------------------
+Getting Sample Data
+-------------------
 
-Data Version Control (DVC) is a data management tool that is meant to be run alongside Git.
-In this project, DVC is used to link changes in the code to specific versions of a sample database containing example project files.
-DVC can be used when this project is installed in Dev mode. You can read more about DVC and how to use it `here <https://dvc.org/doc/start>`_.
-**Note:** Remote access to the sample database stored on google drive is currently restricted. Access requires a :code:`gdrive_client_secret`
-for user access authentication to be shared by developers.
+A sample database for testing and examples is maintained in the
+`openlifu-sample-database <https://github.com/OpenwaterHealth/openlifu-sample-database>`_
+repository. Its files are tracked with Git LFS, so first `install Git LFS
+<https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage>`_.
 
-DVC usage
-~~~~~~~~~
+Then check out the tagged version of the sample database that is compatible
+with this version of ``openlifu``:
 
-To download the sample database:
+.. code:: bash
 
-.. code:: sh
-
-   git pull
-   dvc remote modify --local shared_gdrive gdrive_client_secret <client_secret_here> # Contact developers for grive_client_secret
-   dvc pull # Requires access to remote storage
-
-This will download a directory 'db_dvc' in the repo directory that
-contains the corresponding version of example database files.
-
-To commit updates to the sample database:
-
-.. code:: sh
-
-   dvc add db_dvc
-   git commit -m "Describe updates to database"
-   git push
-   dvc push #Requires access to remote storage
+   git clone --depth 1 --branch openlifu-v0.20.0 https://github.com/OpenwaterHealth/openlifu-sample-database.git
+   cd openlifu-sample-database
+   git lfs pull
 
 Disclaimer
 ----------
