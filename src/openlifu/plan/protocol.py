@@ -76,6 +76,9 @@ class Protocol:
     virtual_fit_options: Annotated[VirtualFitOptions, OpenLIFUFieldData("Virtual fit options", "Configuration of the virtual fit algorithm")] = field(default_factory=VirtualFitOptions)
     """Configuration of the virtual fit algorithm"""
 
+    scaling_options: Annotated[dict, OpenLIFUFieldData("Scaling options", "Options to adjust solution scaling. By default, no additional scaling options are applied")] = field(default_factory=dict)
+    """Options to adjust solution scaling. By default, no additional scaling options are applied"""
+
     def __post_init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -97,6 +100,7 @@ class Protocol:
         if "virtual_fit_options" in d:
             d['virtual_fit_options'] = VirtualFitOptions.from_dict(d['virtual_fit_options'])
         d["analysis_options"] = SolutionAnalysisOptions.from_dict(d.get("analysis_options", {}))
+        d["scaling_options"] = d.get("scaling_options", {})
         return Protocol(**d)
 
     def to_dict(self):
@@ -116,6 +120,7 @@ class Protocol:
             "target_constraints": [tc.to_dict() for tc in self.target_constraints],
             "virtual_fit_options": self.virtual_fit_options.to_dict(),
             "analysis_options": self.analysis_options.to_dict(),
+            "scaling_options": self.scaling_options,
         }
 
     @staticmethod
@@ -316,8 +321,11 @@ class Protocol:
         simulation_result_aggregated: xa.Dataset = xa.Dataset()
         foci: List[Point] = self.focal_pattern.get_targets(target)
 
+        if self.sequence.focus_order is not None and max(self.sequence.focus_order) > len(foci):
+            raise ValueError(f"Focus order index {max(self.sequence.focus_order)} exceeds number of foci ({len(foci)})")
+
         # updating solution sequence if pulse mismatch
-        if (self.sequence.pulse_count % len(foci)) != 0:
+        if self.sequence.focus_order is None and (self.sequence.pulse_count % len(foci)) != 0:
             self.fix_pulse_mismatch(on_pulse_mismatch, foci)
         # run simulation and aggregate the results
         for focus in foci:
@@ -364,14 +372,21 @@ class Protocol:
                 raise ValueError(f"Cannot scale solution {solution.id} if simulation is not enabled!")
             self.logger.info(f"Scaling solution {solution.id}...")
             #TODO can analysis be an attribute of solution ?
-            solution.scale(self.focal_pattern, analysis_options=analysis_options)
+            solution.scale(self.focal_pattern, analysis_options=analysis_options, **self.scaling_options)
 
         if simulate:
             # Finally the resulting pressure is max-aggregated and intensity is mean-aggregated, over all focus points .
             pnp_aggregated = solution.simulation_result['p_min'].max(dim="focal_point_index", keep_attrs=True)
             ppp_aggregated = solution.simulation_result['p_max'].max(dim="focal_point_index", keep_attrs=True)
-            # TODO: Ensure this mean is weighted by the number of times each point is focused on, once openlifu supports hitting points different numbers of times
-            intensity_aggregated = solution.simulation_result['intensity'].mean(dim="focal_point_index", keep_attrs=True)
+            focus_counts = solution.get_focus_counts()
+            focus_weights = xa.DataArray(
+                focus_counts / np.sum(focus_counts),
+                dims=("focal_point_index",),
+                coords={"focal_point_index": solution.simulation_result.coords["focal_point_index"]},
+            )
+            intensity = solution.simulation_result['intensity']
+            intensity_aggregated = (intensity * focus_weights).sum(dim="focal_point_index", keep_attrs=True)
+            intensity_aggregated.attrs.update(intensity.attrs)
             simulation_result_aggregated = deepcopy(solution.simulation_result)
             simulation_result_aggregated = simulation_result_aggregated.drop_dims("focal_point_index")
             simulation_result_aggregated['p_min'] = pnp_aggregated

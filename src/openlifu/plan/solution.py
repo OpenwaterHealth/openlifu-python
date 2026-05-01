@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import heapq
 import json
 import logging
 import tempfile
@@ -123,6 +124,8 @@ class Solution:
             raise ValueError("Pulse train interval must be greater than or equal to the total pulse interval")
         if self.sequence.pulse_train_count <= 0:
             raise ValueError("Pulse train count must be positive")
+        if (self.sequence.focus_order is not None and len(self.foci) > 0 and max(self.sequence.focus_order) > len(self.foci)):
+            raise ValueError(f"Focus order index {max(self.sequence.focus_order)} exceeds number of foci ({len(self.foci)})")
         if len(self.foci)>0 and self.delays is not None and self.delays.shape[0] != len(self.foci):
             raise ValueError(f"Delays number of foci ({self.delays.shape[0]}) does not match number of foci ({len(self.foci)})")
         if len(self.foci)>0 and self.apodizations is not None and self.apodizations.shape[0] != len(self.foci):
@@ -137,6 +140,83 @@ class Solution:
     def num_foci(self) -> int:
         """Get the number of foci"""
         return len(self.foci)
+
+    def get_focus_order(self) -> np.ndarray:
+        """Get the focus index order for each pulse."""
+        if self.sequence.focus_order is not None:
+            return np.array(self.sequence.focus_order)
+        return (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
+
+    def get_focus_counts(self) -> np.ndarray:
+        """Get the number of pulses assigned to each focus."""
+        focus_order = self.get_focus_order()
+        return np.array([
+            np.sum(focus_order == (focus_index + 1))
+            for focus_index in range(self.num_foci())
+        ])
+
+    def compute_balanced_focus_counts(self, balance_metric_values: np.ndarray, pulse_count: int) -> np.ndarray:
+        """Compute per-focus pulse counts that balance a positive per-focus metric."""
+        balance_metric_values = np.asarray(balance_metric_values, dtype=float)
+        if balance_metric_values.shape != (self.num_foci(),):
+            raise ValueError(f"Balance metric must have one value per focus ({self.num_foci()})")
+        if pulse_count < self.num_foci():
+            raise ValueError(f"Pulse count ({pulse_count}) must be greater than or equal to number of foci ({self.num_foci()})")
+        if np.any(~np.isfinite(balance_metric_values)) or np.any(balance_metric_values <= 0):
+            raise ValueError("Balance metric values must be finite and positive")
+
+        remaining_pulses = pulse_count - self.num_foci()
+        counts = np.ones(self.num_foci(), dtype=int)
+        if remaining_pulses == 0:
+            return counts
+
+        weights = 1 / balance_metric_values
+        ideal_extra_counts = weights / np.sum(weights) * remaining_pulses
+        extra_counts = np.floor(ideal_extra_counts).astype(int)
+        counts += extra_counts
+
+        leftover_pulses = remaining_pulses - int(np.sum(extra_counts))
+        remainders = ideal_extra_counts - extra_counts
+        for focus_index in np.argsort(remainders)[::-1][:leftover_pulses]:
+            counts[focus_index] += 1
+        return counts
+
+    def build_focus_order(self, focus_counts: np.ndarray, ordering: str = "minimize_repeats") -> list[int]:
+        """Build a focus order from per-focus pulse counts."""
+        if ordering != "minimize_repeats":
+            raise ValueError(f"Unsupported focus ordering '{ordering}'")
+        focus_counts = np.asarray(focus_counts, dtype=int)
+        if focus_counts.shape != (self.num_foci(),):
+            raise ValueError(f"Focus counts must have one value per focus ({self.num_foci()})")
+        if np.any(focus_counts < 0):
+            raise ValueError("Focus counts must be non-negative")
+
+        heap = []
+        for focus_index, focus_count in enumerate(focus_counts):
+            if focus_count > 0:
+                heap.append((-focus_count, focus_index + 1))
+
+        heapq.heapify(heap)
+        focus_order = []
+        previous_count = 0
+        previous_focus_index = None
+
+        while heap or previous_count < 0:
+            if not heap:
+                focus_order.append(previous_focus_index)
+                previous_count += 1
+                continue
+
+            focus_count, focus_index = heapq.heappop(heap)
+            focus_order.append(focus_index)
+            focus_count += 1
+
+            if previous_count < 0:
+                heapq.heappush(heap, (previous_count, previous_focus_index))
+
+            previous_count = focus_count
+            previous_focus_index = focus_index
+        return focus_order
 
     def simulate(self,
         params: xa.Dataset,
@@ -195,7 +275,8 @@ class Solution:
     def analyze(self,
                 simulation_result: xa.Dataset | None = None,
                 options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
-                param_constraints: Dict[str,ParameterConstraint] | None = None) -> SolutionAnalysis:
+                param_constraints: Dict[str,ParameterConstraint] | None = None,
+                focus_counts: np.ndarray | None = None) -> SolutionAnalysis:
         """Analyzes the treatment solution.
 
         Args:
@@ -203,6 +284,7 @@ class Solution:
             options: A struct for solution analysis options.
             param_constraints: A dictionary of parameter constraints to apply to the analysis.
                 The keys are the parameter names and the values are the ParameterConstraint objects.
+            focus_counts: Optional per-focus pulse counts to use for ITA calculations.
 
         Returns: A struct containing the results of the analysis.
         """
@@ -241,7 +323,7 @@ class Solution:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_interval * self.sequence.pulse_count * self.sequence.pulse_train_count)
         else:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_train_interval * self.sequence.pulse_train_count)
-        ita_mWcm2 = rescale_coords(self.get_ita(intensity=simulation_result['intensity'], units="mW/cm^2"), options.distance_units)
+        ita_mWcm2 = rescale_coords(self.get_ita(intensity=simulation_result['intensity'], units="mW/cm^2", focus_counts=focus_counts), options.distance_units)
 
         power_W = np.zeros(self.num_foci())
         TIC = np.zeros(self.num_foci())
@@ -422,7 +504,10 @@ class Solution:
     def scale(
             self,
             focal_pattern: FocalPattern,
-            analysis_options: SolutionAnalysisOptions = SolutionAnalysisOptions()
+            analysis_options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
+            balance_method: str | None = None,
+            balance_metric: str = "mainlobe_ispta_mWcm2",
+            ordering: str = "minimize_repeats",
     ) -> None:
         """
         Scale the solution in-place to match the target pressure.
@@ -430,6 +515,9 @@ class Solution:
         Args:
             focal_pattern: FocalPattern
             analysis_options: plan.solution.SolutionAnalysisOptions
+            balance_method: Optional method for balancing scaled delivery. Supported: "ispta_repeats".
+            balance_metric: The per-focus analysis metric used for balancing.
+            ordering: How to order balanced repeats. Supported: "minimize_repeats".
 
         Returns:
             analysis_scaled: the resulting plan.solution.SolutionAnalysis from scaled solution
@@ -445,6 +533,18 @@ class Solution:
             self.simulation_result['intensity'][i].data *= scaling**2
             self.apodizations[i] = self.apodizations[i]*apod_factors[i]
         self.voltage = v1
+
+        if balance_method is None:
+            return
+        if balance_method != "ispta_repeats":
+            raise ValueError(f"Unsupported balance method '{balance_method}'")
+        baseline_focus_counts = np.ones(self.num_foci(), dtype=int)
+        scaled_analysis = self.analyze(options=analysis_options, focus_counts=baseline_focus_counts)
+        if not hasattr(scaled_analysis, balance_metric):
+            raise ValueError(f"Unknown balance metric '{balance_metric}'")
+        balance_metric_values = np.array(getattr(scaled_analysis, balance_metric))
+        focus_counts = self.compute_balanced_focus_counts(balance_metric_values, self.sequence.pulse_count)
+        self.sequence.focus_order = self.build_focus_order(focus_counts, ordering=ordering)
 
     def get_pulsetrain_dutycycle(self) -> float:
         """
@@ -471,7 +571,12 @@ class Solution:
         sequence_duty_cycle = self.get_pulsetrain_dutycycle() * between_pulsetrain_duty_cycle
         return sequence_duty_cycle
 
-    def get_ita(self, intensity: xa.DataArray | None = None, units: str = "mW/cm^2") -> xa.DataArray:
+    def get_ita(
+            self,
+            intensity: xa.DataArray | None = None,
+            units: str = "mW/cm^2",
+            focus_counts: np.ndarray | None = None
+    ) -> xa.DataArray:
         """
         Calculate the intensity-time-area product for a treatment solution.
 
@@ -480,6 +585,7 @@ class Solution:
                 If provided, use this intensity data array instead of the one from the simulation result.
             units: str
                 Target units. Default "mW/cm^2".
+            focus_counts: Optional per-focus pulse counts. If not provided, use the sequence focus order.
 
         Returns:
             xa.DataArray
@@ -491,10 +597,14 @@ class Solution:
             intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
         pulsetrain_dutycycle = self.get_pulsetrain_dutycycle()
         treatment_dutycycle = self.get_sequence_dutycycle()
-        pulse_seq = (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
-        counts = np.zeros((1, 1, 1, self.num_foci()))
-        for i in range(self.num_foci()):
-            counts[0, 0, 0, i] = np.sum(pulse_seq == (i+1))
+        if focus_counts is None:
+            focus_counts = self.get_focus_counts()
+        focus_counts = np.asarray(focus_counts)
+        if focus_counts.shape != (self.num_foci(),):
+            raise ValueError(f"Focus counts must have one value per focus ({self.num_foci()})")
+        if np.any(focus_counts < 0):
+            raise ValueError("Focus counts must be non-negative")
+        counts = focus_counts.reshape((1, 1, 1, self.num_foci()))
         intensity = intensity_scaled.copy(deep=True)
         isppa_avg = np.sum(np.expand_dims(intensity.data, axis=-1) * counts, axis=-1) / np.sum(counts)
         intensity.data = isppa_avg * pulsetrain_dutycycle * treatment_dutycycle

@@ -141,6 +141,61 @@ def test_num_foci(example_solution:Solution):
     assert example_solution.delays.shape[0] == num_foci
     assert example_solution.apodizations.shape[0] == num_foci
 
+
+def test_solution_get_focus_counts_with_explicit_focus_order(example_solution: Solution):
+    """Test that explicit focus_order is counted per focus."""
+    example_solution.foci = [
+        Point(id="focus_1"),
+        Point(id="focus_2"),
+        Point(id="focus_3"),
+    ]
+    example_solution.sequence = Sequence(
+        pulse_count=6,
+        pulse_interval=1,
+        pulse_train_interval=6,
+        focus_order=[1, 3, 2, 1, 3, 1],
+    )
+
+    np.testing.assert_array_equal(example_solution.get_focus_counts(), np.array([3, 1, 2]))
+
+
+def test_solution_compute_balanced_focus_counts_preserves_total_and_weights_inverse_metric(example_solution: Solution):
+    """Test ISPTA balancing count allocation preserves pulse count and favors lower metrics."""
+    example_solution.foci = [
+        Point(id="focus_1"),
+        Point(id="focus_2"),
+        Point(id="focus_3"),
+    ]
+
+    focus_counts = example_solution.compute_balanced_focus_counts(
+        balance_metric_values=np.array([10, 20, 10]),
+        pulse_count=8,
+    )
+
+    assert np.sum(focus_counts) == 8
+    assert np.all(focus_counts >= 1)
+    assert focus_counts[1] < focus_counts[0]
+    assert focus_counts[1] < focus_counts[2]
+
+
+def test_solution_build_focus_order_minimizes_repeats(example_solution: Solution):
+    """Test focus order construction preserves counts and avoids repeats when possible."""
+    example_solution.foci = [
+        Point(id="focus_1"),
+        Point(id="focus_2"),
+        Point(id="focus_3"),
+    ]
+    focus_counts = np.array([3, 2, 3])
+
+    focus_order = example_solution.build_focus_order(focus_counts)
+
+    assert len(focus_order) == np.sum(focus_counts)
+    np.testing.assert_array_equal(
+        np.bincount(focus_order, minlength=example_solution.num_foci() + 1)[1:],
+        focus_counts,
+    )
+    assert all(focus_order[i] != focus_order[i + 1] for i in range(len(focus_order) - 1))
+
 @pytest.mark.parametrize("compact_representation", [True, False])
 def test_json_serialize_deserialize_solution_analysis(compact_representation: bool):
     """Verify that turning a SolutionAnalysis into json and then re-constructing it gets back to the original"""

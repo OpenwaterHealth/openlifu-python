@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import numpy as np
 import pytest
+import xarray as xa
 
 from openlifu import Protocol, Transducer
 from openlifu.bf.focal_patterns import Wheel
@@ -29,6 +31,11 @@ def example_wheel_pattern() -> Wheel:
     return Wheel(num_spokes=6)
 
 def test_to_dict_from_dict(example_protocol: Protocol):
+    example_protocol.scaling_options = {
+        "balance_method": "ispta_repeats",
+        "balance_metric": "mainlobe_ispta_mWcm2",
+        "ordering": "minimize_repeats",
+    }
     proto_dict = example_protocol.to_dict()
     new_protocol = Protocol.from_dict(proto_dict)
     assert new_protocol == example_protocol
@@ -106,3 +113,37 @@ def test_fix_pulse_mismatch(
             assert example_protocol.sequence.pulse_count == 2*num_foci
         elif on_pulse_mismatch is OnPulseMismatchAction.ROUNDDOWN:
             assert example_protocol.sequence.pulse_count == num_foci
+
+
+def test_calc_solution_skips_pulse_mismatch_when_focus_order_present(
+        example_protocol: Protocol,
+        example_transducer: Transducer,
+        example_session: Session,
+        mocker
+    ):
+    """Test explicit focus_order allows pulse counts that are not divisible by number of foci."""
+    example_protocol.focal_pattern = Wheel(num_spokes=3)
+    num_foci = example_protocol.focal_pattern.num_foci()
+    example_protocol.sequence.pulse_count = 5
+    example_protocol.sequence.focus_order = [1, 2, 3, 1, 2]
+    beamform_mock = mocker.patch.object(
+        example_protocol,
+        "beamform",
+        return_value=(np.zeros(len(example_transducer.elements)), np.ones(len(example_transducer.elements))),
+    )
+    fix_pulse_mismatch_mock = mocker.patch.object(example_protocol, "fix_pulse_mismatch")
+
+    solution, simulation_result_aggregated, solution_analysis = example_protocol.calc_solution(
+        target=example_session.targets[0],
+        transducer=example_transducer,
+        params=xa.Dataset(),
+        simulate=False,
+        scale=False,
+    )
+
+    assert solution.sequence.focus_order == [1, 2, 3, 1, 2]
+    assert solution.sequence.pulse_count == 5
+    assert beamform_mock.call_count == num_foci
+    fix_pulse_mismatch_mock.assert_not_called()
+    assert simulation_result_aggregated is None
+    assert solution_analysis is None
