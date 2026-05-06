@@ -23,15 +23,12 @@ from openlifu.io.LIFUConfig import (
     OW_POWER_GET_RGB,
     OW_POWER_GET_TEMP1,
     OW_POWER_GET_TEMP2,
-    OW_POWER_HV_ENABLE,
     OW_POWER_HV_OFF,
     OW_POWER_HV_ON,
-    OW_POWER_RAW_DAC,
     OW_POWER_SET_DACS,
     OW_POWER_SET_FAN,
     OW_POWER_SET_HV,
     OW_POWER_SET_RGB,
-    OW_POWER_VMON,
 )
 from openlifu.io.LIFUUart import LIFUUart
 
@@ -133,11 +130,8 @@ class HVController:
             # r.print_packet()
             if r.data_len == 3:
                 ver = f"v{r.data[0]}.{r.data[1]}.{r.data[2]}"
-            elif r.data_len and r.data:
-                # Decode only the valid length, strip trailing NULs and whitespace
-                ver_str = r.data[:r.data_len].decode('utf-8', errors='ignore').rstrip('\x00').strip()
-                ver = ver_str if ver_str else 'v0.0.0'
-
+            else:
+                ver = "v0.0.0"
             logger.info(ver)
             return ver
 
@@ -173,7 +167,7 @@ class HVController:
                 raise ValueError("Console Device  not connected")
 
             # Check if echo_data is a byte array
-            if echo_data is not None and not isinstance(echo_data, bytes | bytearray):
+            if echo_data is not None and not isinstance(echo_data, (bytes, bytearray)):
                 raise TypeError("echo_data must be a byte array")
 
             r = self.uart.send_packet(
@@ -567,17 +561,15 @@ class HVController:
             )
 
         try:
-            #dac_input = int(((voltage) / 162) * 4095)
+            dac_input = int(((voltage) / 162) * 4095)
             # logger.info("Setting DAC Value %d.", dac_input)
             # Pack the 12-bit DAC input into two bytes
-            #data = bytes(
-            #    [
-            #        (dac_input >> 8) & 0xFF,  # High byte (most significant bits)
-            #        dac_input & 0xFF,  # Low byte (least significant bits)
-            #    ]
-            #)
-
-            data = struct.pack('>f', voltage)
+            data = bytes(
+                [
+                    (dac_input >> 8) & 0xFF,  # High byte (most significant bits)
+                    dac_input & 0xFF,  # Low byte (least significant bits)
+                ]
+            )
 
             r = self.uart.send_packet(
                 id=None, packetType=OW_POWER, command=OW_POWER_SET_HV, data=data
@@ -926,175 +918,6 @@ class HVController:
             logger.error("Unexpected error during process: %s", e)
             raise  # Re-raise the exception for the caller to handle
 
-    def get_vmon_values(self) -> list[dict]:
-        """
-        Retrieve the voltage monitor readings from the console device.
-
-        Returns:
-            list[dict]: A list of 8 dictionaries, one for each channel, containing:
-                - channel (int): Channel number (0-7)
-                - raw_adc (int): Raw ADC reading (uint16)
-                - reserved (int): Reserved value (uint16)
-                - voltage (float): Voltage reading in volts
-                - converted_voltage (float): Converted voltage value
-
-        Raises:
-            ValueError: If the UART is not connected.
-            Exception: If an error occurs or the received data length is invalid.
-        """
-        try:
-            if self.uart.demo_mode:
-                # Return demo data for 8 channels
-                return [
-                    {"channel": i, "raw_adc": 2048, "reserved": 0, "voltage": 12.5 + i, "converted_voltage": 25.0 + i * 2}
-                    for i in range(8)
-                ]
-
-            if not self.uart.is_connected():
-                logger.error("Console Device not connected")
-                return []
-
-            # Send the voltage monitor command
-            r = self.uart.send_packet(
-                id=None, packetType=OW_POWER, command=OW_POWER_VMON
-            )
-            self.uart.clear_buffer()
-            # r.print_packet()
-
-            # Check if the data length matches 8 channels * 10 bytes per channel = 80 bytes
-            # Each channel: index (raw_adc) + uint16 (reserved) + float (voltage) + float (converted_voltage)
-            if r.data_len == 80:  # sizeof(ADC_ChannelData_t)
-                # Unpack: 8 uint16s, 8 floats, 8 floats (little-endian)
-                raw_values = struct.unpack_from("<8H", r.data, 0)
-                voltages = struct.unpack_from("<8f", r.data, 16)
-                converted_voltages = struct.unpack_from("<8f", r.data, 48)
-                channels = []
-                offset = 0
-
-                # Unpack data for 8 channels
-                for channel_num in range(8):
-                    channels.append({
-                        "channel": channel_num,
-                        "raw_adc": raw_values[channel_num],
-                        "voltage": round(voltages[channel_num], 3),
-                        "converted_voltage": round(converted_voltages[channel_num], 3)
-                    })
-
-                    offset += 10  # Move to next channel (2 + 4 + 4 = 10 bytes)
-
-                return channels
-            else:
-                raise ValueError(f"Invalid data length received for voltage monitor: expected 96 bytes, got {r.data_len}")
-
-        except ValueError as v:
-            logger.error("ValueError: %s", v)
-            raise  # Re-raise the exception for the caller to handle
-
-    def set_raw_dac(self, dac_id: int = 0, dac_value: int = 0) -> int:
-        """
-        Set Raw DAC value.
-
-        Args:
-            dac_id (int): The desired DAC to set (default is 0). Valid IDs are 0, 1, 2, and 3.
-            dac_value (int): The desired DAC value (default is 0). Must be between 0 and 4095.
-        Returns:
-            int: The current output DAC value.
-
-        Raises:
-            ValueError: If the controller is not connected.
-        """
-        if not self.uart.is_connected():
-            raise ValueError("High voltage controller not connected")
-
-        if dac_id not in [0, 1, 2 ,3]:
-            raise ValueError("Invalid DAC ID. Must be 0, 1, 2, or 3")
-
-        if dac_value not in range(4096):
-            raise ValueError("Invalid DAC value. Must be 0 to 4095")
-
-        try:
-            if self.uart.demo_mode:
-                return dac_value
-            logger.info("Setting Raw DAC value.")
-            data = bytes(
-                [
-                    (dac_value >> 8) & 0xFF,  # High byte (most significant bits)
-                    dac_value & 0xFF,  # Low byte (least significant bits)
-                ]
-            )
-            r = self.uart.send_packet(
-                id=None,
-                addr=dac_id,
-                packetType=OW_POWER,
-                command=OW_POWER_RAW_DAC,
-                data=data,
-            )
-
-            self.uart.clear_buffer()
-            # r.print_packet()
-
-            if r.packet_type == OW_ERROR:
-                logger.error("Error setting DAC value")
-                return -1
-
-            logger.info(f"Set DAC value to {dac_value}")
-            return dac_value
-
-        except ValueError as v:
-            logger.error("ValueError: %s", v)
-            raise  # Re-raise the exception for the caller to handle
-
-        except Exception as e:
-            logger.error("Unexpected error during process: %s", e)
-            raise  # Re-raise the exception for the caller to handle
-
-    def hv_enable(self, enable: bool = False) -> bool:
-        """
-        Enable or disable high voltage output.
-
-        Args:
-            enable (bool): True to enable HV, False to disable.
-        Returns:
-            bool: True if the operation was successful, False otherwise.
-        Raises:
-            ValueError: If the controller is not connected.
-        if not self.uart.is_connected():
-        """
-        if not self.uart.is_connected():
-            raise ValueError("High voltage controller not connected")
-
-        try:
-            if self.uart.demo_mode:
-                return True
-
-            logger.info(f"{'Enabling' if enable else 'Disabling'} high voltage output.")
-
-            r = self.uart.send_packet(
-                id=None,
-                addr=1 if enable else 0,
-                packetType=OW_POWER,
-                command=OW_POWER_HV_ENABLE,
-                data=None,
-            )
-
-            self.uart.clear_buffer()
-            # r.print_packet()
-
-            if r.packet_type == OW_ERROR:
-                logger.error("Error setting HV enable state")
-                return False
-
-            logger.info(f"High voltage output {'enabled' if enable else 'disabled'} successfully.")
-            return True
-
-        except ValueError as v:
-            logger.error("ValueError: %s", v)
-            raise  # Re-raise the exception for the caller to handle
-
-        except Exception as e:
-            logger.error("Unexpected error during process: %s", e)
-            raise  # Re-raise the exception for the caller to handle
-
     def soft_reset(self) -> bool:
         """
         Perform a soft reset on the Console device.
@@ -1113,7 +936,9 @@ class HVController:
             if not self.uart.is_connected():
                 raise ValueError("Console Device  not connected")
 
-            r = self.uart.send_packet(id=None, packetType=OW_CMD, command=OW_CMD_RESET)
+            r = self.uart.send_packet(
+                id=None, packetType=OW_CMD, command=OW_CMD_RESET
+            )
             self.uart.clear_buffer()
             # r.print_packet()
             if r.packet_type == OW_ERROR:

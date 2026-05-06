@@ -5,7 +5,6 @@ import logging
 import queue
 import threading
 import time
-from contextlib import suppress
 
 import serial
 import serial.tools.list_ports
@@ -228,7 +227,7 @@ class LIFUUart:
             return
 
         if self.read_thread:
-            self.read_thread.join(timeout=5)
+            self.read_thread.join()
         if self.serial and self.serial.is_open:
             self.serial.close()
             self.serial = None
@@ -294,34 +293,6 @@ class LIFUUart:
                 return port.device
         return None
 
-    def reopen_after_reset(self, retries=5, delay=1.0):
-        """
-        Attempt to reopen the serial port after a device reset or disconnection.
-        Returns True if reconnected, False otherwise.
-        """
-        try:
-            if self.serial and self.serial.is_open:
-                with suppress(Exception):
-                    self.serial.close()
-            self.serial = None
-            self.port = None
-            for _ in range(retries):
-                time.sleep(delay)
-                port = self.list_vcp_with_vid_pid()
-                if port:
-                    self.port = port
-                    try:
-                        self.connect()
-                        log.info("Reconnected to UART on %s after reset.", self.port)
-                        return True
-                    except (OSError, ValueError) as e:
-                        log.warning("Reconnect attempt failed: %s", e)
-            log.error("Failed to reconnect UART after reset.")
-            return False
-        except (OSError, ValueError) as e:
-            log.error("reopen_after_reset() error: %s", e)
-            return False
-
     def _read_data(self, timeout=20):
         """Read data from the serial port in a separate thread."""
         log.debug("Starting data read loop for %s.", self.descriptor)
@@ -367,14 +338,8 @@ class LIFUUart:
                 else:
                     time.sleep(0.05)  # Brief sleep to avoid a busy loop
             except serial.SerialException as e:
-                if "ClearCommError" in str(e):
-                    log.warning("Serial _read_data ClearCommError on %s (ignoring): %s", self.descriptor, e)
-                    time.sleep(0.1)
-                    continue
                 log.error("Serial _read_data error on %s: %s", self.descriptor, e)
                 self.running = False
-                self.signal_disconnect.emit(self.descriptor, self.port)
-                self.port = None
 
     def _tx(self, data: bytes):
         """Send data over UART."""
@@ -406,14 +371,7 @@ class LIFUUart:
 
         while timeout == -1 or time.monotonic() - start_time < timeout:
             time.sleep(0.05)
-            try:
-                raw_data += self.serial.read_all()
-            except serial.SerialException as e:
-                if "ClearCommError" in str(e):
-                    log.warning("Serial lost during read_packet; attempting reconnect...")
-                    self.reopen_after_reset()
-                    return None
-                raise
+            raw_data += self.serial.read_all()
             if raw_data:
                 count += 1
                 if count > 1:
@@ -451,7 +409,7 @@ class LIFUUart:
                 id = self.packet_count
 
             if data:
-                if not isinstance(data, bytes | bytearray):
+                if not isinstance(data, (bytes, bytearray)):
                     raise ValueError("Data must be bytes or bytearray")
                 payload = data
                 payload_length = len(payload)
@@ -477,14 +435,7 @@ class LIFUUart:
             self._tx(packet)
 
             if not self.asyncMode:
-                try:
-                    return self.read_packet(timeout=timeout)
-                except serial.SerialException as e:
-                    if "ClearCommError" in str(e):
-                        log.warning("Serial handle lost after RESET, attempting reconnect...")
-                        self.reopen_after_reset()
-                        return None
-                    raise
+                return self.read_packet(timeout=timeout)
             else:
                 response_queue = queue.Queue()
                 with self.response_lock:

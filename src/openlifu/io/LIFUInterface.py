@@ -8,38 +8,23 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
-import openlifu
 from openlifu.io.LIFUHVController import HVController
 from openlifu.io.LIFUSignal import LIFUSignal
 from openlifu.io.LIFUTXDevice import TriggerModeOpts, TxDevice
 from openlifu.io.LIFUUart import LIFUUart
 from openlifu.plan.solution import Solution
 
-REF_MAX_SEQUENCE_TIMES = {
-    "default": [2*60, 5*60, 10*60],    # users to use default values
-    "stress_test": [5*60, 9*60, 15*60] # QA to use stress test values
-}
-
+REF_MAX_SEQUENCE_TIMES = [2*60, 5*60, 20*60]
 REF_MAX_DUTY_CYCLES = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME = [
+    [65, 65, 65], # 0.05
+    [65, 65, 50], # 0.1
+    [50, 40, 35], # 0.2
+    [45, 35, 30], # 0.3
+    [35, 30, 25], # 0.4
+    [30, 25, 20] # 0.5
+    ]
 
-MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME = {
-    "evt2": [
-        [45, 45, 45], # 0.05
-        [40, 40, 40], # 0.1
-        [40, 40, 35], # 0.2
-        [40, 35, 30], # 0.3
-        [35, 30, 25], # 0.4
-        [30, 25, 20] # 0.5
-    ],
-    "evt0": [
-        [65, 65, 65], # 0.05
-        [65, 65, 50], # 0.1
-        [50, 40, 35], # 0.2
-        [45, 35, 30], # 0.3
-        [35, 30, 25], # 0.4
-        [30, 25, 20] # 0.5
-    ],
-}
 
 class LIFUInterfaceStatus(Enum):
     STATUS_COMMS_ERROR = -1
@@ -72,9 +57,7 @@ class LIFUInterface:
                  HV_test_mode: bool = False,
                  run_async: bool = False,
                  ext_power_supply: bool = False,
-                 module_invert: bool | List[bool] = False,
-                 voltage_table_selection: Optional[str] = None,
-                 sequence_time_selection: Optional[str] = None) -> None:
+                 module_invert: bool | List[bool] = False) -> None:
         """
         Initialize the LIFUInterface with given parameters and store them in the class.
 
@@ -99,11 +82,6 @@ class LIFUInterface:
         self._hv_uart = None
         self.status = LIFUInterfaceStatus.STATUS_SYS_OFF
 
-        self.voltage_table = None
-        self.sequence_time = None
-        self.voltage_table_selection = voltage_table_selection
-        self.sequence_time_selection = sequence_time_selection
-
         # Create a TXDevice instance as part of the interface
         logger.debug("Initializing TX Module of LIFUInterface with VID: %s, PID: %s, baudrate: %s, timeout: %s", vid, tx_pid, baudrate, timeout)
         self._tx_uart = LIFUUart(vid=vid, pid=tx_pid, baudrate=baudrate, timeout=timeout, desc="TX", demo_mode=TX_test_mode, async_mode=run_async)
@@ -118,6 +96,7 @@ class LIFUInterface:
             self._hv_uart = LIFUUart(vid=vid, pid=con_pid, baudrate=baudrate, timeout=timeout, desc="HV", demo_mode=HV_test_mode, async_mode=run_async)
             self.hvcontroller = HVController(uart=self._hv_uart)
 
+
         # Connect signals to internal handlers
         if self._async_mode:
             self._tx_uart.signal_connect.connect(self.signal_connect.emit)
@@ -127,41 +106,13 @@ class LIFUInterface:
             self._hv_uart.signal_disconnect.connect(self.signal_disconnect.emit)
             self._hv_uart.signal_data_received.connect(self.signal_data_received.emit)
 
-    # Temporary fix for hardware variations between EVT0 and EVT2
-    def _resolve_voltage_chart_evt_version(self, voltage_table: str) -> list[list[int]]:
-        if voltage_table is None:
-            try:
-                evt_version = "evt0" if self.hvcontroller.get_version().startswith("v1.1") else "evt2"
-            except Exception as e:
-                logger.error("Error getting console version: %s", e)
-                raise e
-        else:
-            evt_version = voltage_table.lower()
-            if evt_version not in MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME:
-                raise ValueError(f"Invalid voltage_table option '{voltage_table}'. Valid options are: {tuple(MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME.keys())}")
-
-        return MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME[evt_version]
-
-    # Restrict sequence time options for users vs QA
-    def _resolve_max_sequence_time_set(self, sequence_time: str) -> list[int]:
-        if sequence_time is None:
-            return REF_MAX_SEQUENCE_TIMES["default"]
-        else:
-            sequence_time = sequence_time.lower()
-            if sequence_time not in REF_MAX_SEQUENCE_TIMES:
-                raise ValueError(f"Invalid sequence_time option '{sequence_time}'. Valid options are: {tuple(REF_MAX_SEQUENCE_TIMES.keys())}")
-            return REF_MAX_SEQUENCE_TIMES[sequence_time]
-
     async def start_monitoring(self, interval: int = 1) -> None:
         """Start monitoring for USB device connections."""
         try:
-            if self._hv_uart is not None:
-                await asyncio.gather(
-                    self._tx_uart.monitor_usb_status(interval),
-                    self._hv_uart.monitor_usb_status(interval)
-                )
-            else:
-                await self._tx_uart.monitor_usb_status(interval)
+            await asyncio.gather(
+                self._tx_uart.monitor_usb_status(interval),
+                self._hv_uart.monitor_usb_status(interval)
+            )
 
         except Exception as e:
             logger.error("Error starting monitoring: %s", e)
@@ -170,10 +121,8 @@ class LIFUInterface:
     def stop_monitoring(self) -> None:
         """Stop monitoring for USB device connections."""
         try:
-            if self._tx_uart is not None:
-                self._tx_uart.stop_monitoring()
-            if self._hv_uart is not None:
-                self._hv_uart.stop_monitoring()
+            self._tx_uart.stop_monitoring()
+            self._hv_uart.stop_monitoring()
         except Exception as e:
             logger.error("Error stopping monitoring: %s", e)
             raise e
@@ -213,11 +162,11 @@ class LIFUInterface:
         duty_cycle_index = np.where(duty_cycles_limits >= sequence_duty_cycle)[0][0]
 
         # Find the index of the duration in the reference list
-        duration_limits = np.array(self.sequence_time)
+        duration_limits = np.array(REF_MAX_SEQUENCE_TIMES)
         duration_index = np.where(duration_limits >= sequence_duration)[0][0]
 
         # Return the maximum voltage for the given duty cycle and duration
-        return self.voltage_table[duty_cycle_index][duration_index]
+        return MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME[duty_cycle_index][duration_index]
 
     def get_max_voltage_table(self) -> pd.DataFrame:
         """
@@ -229,10 +178,10 @@ class LIFUInterface:
         data = {
             "Duty Cycle (%)": [f"<={100 * dc:0.1f}%" for dc in REF_MAX_DUTY_CYCLES],
             }
-        for i, duration in enumerate(self.sequence_time):
+        for i, duration in enumerate(REF_MAX_SEQUENCE_TIMES):
             col_name = f"<={duration // 60} min"
             data[col_name] = [
-                self.voltage_table[j][i] for j in range(len(REF_MAX_DUTY_CYCLES))
+                MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME[j][i] for j in range(len(REF_MAX_DUTY_CYCLES))
             ]
         max_voltage =  pd.DataFrame(data).set_index("Duty Cycle (%)")
         max_voltage.Name = "Maximum Voltage (V)"
@@ -250,8 +199,6 @@ class LIFUInterface:
         if isinstance(solution, Solution):
             solution = solution.to_dict()
 
-        self.voltage_table = self._resolve_voltage_chart_evt_version(self.voltage_table_selection)
-        self.sequence_time = self._resolve_max_sequence_time_set(self.sequence_time_selection)
         sequence_duty_cycle = self.get_sequence_duty_cycle(solution)
         duty_cycles_limits = np.array(REF_MAX_DUTY_CYCLES)
         if sequence_duty_cycle > duty_cycles_limits.max():
@@ -259,12 +206,12 @@ class LIFUInterface:
         duty_cycle_index = np.where(duty_cycles_limits >= sequence_duty_cycle)[0][0]
 
         sequence_duration = self.get_sequence_duration(solution)
-        duration_limits = np.array(self.sequence_time)
+        duration_limits = np.array(REF_MAX_SEQUENCE_TIMES)
         if sequence_duration > duration_limits.max():
             raise ValueError(f"Sequence duration ({sequence_duration:0.0f} s) exceeds maximum allowed duration ({duration_limits.max()} s).")
         duration_index = np.where(duration_limits >= sequence_duration)[0][0]
 
-        max_voltage = self.voltage_table[duty_cycle_index][duration_index]
+        max_voltage = MAX_VOLTAGE_BY_DUTY_CYCLE_AND_SEQUENCE_TIME[duty_cycle_index][duration_index]
         if solution['voltage'] > max_voltage:
             raise ValueError(f"Voltage ({solution['voltage']:0.1f}V) exceeds maximum allowed voltage ({max_voltage:0.1f}V) for duty cycle ({100*sequence_duty_cycle:0.1f} <= {100*duty_cycles_limits[duty_cycle_index]}%) and sequence time ({sequence_duration:0.0f} <= {duration_limits[duration_index]}s).")
 
@@ -464,18 +411,14 @@ class LIFUInterface:
             raise e
 
     def close(self):
-        self.stop_monitoring()
-        if self.txdevice:
-            self.txdevice.close()
-        if self.hvcontroller:
-            self.hvcontroller.close()
+        pass
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    @staticmethod
-    def get_sdk_version() -> str:
-        return openlifu.__version__
+        self.stop_monitoring()
+        if self.txdevice:
+            self.txdevice.close()
+        if self.hvcontroller:
+            self.hvcontroller.close()
