@@ -53,7 +53,7 @@ class Database:
         self.path = os.path.normpath(path)
         self.logger = logging.getLogger(__name__)
 
-    def write_gridweights(self, transducer_id: str, grid_hash: str, grid_weights, on_conflict: OnConflictOpts = OnConflictOpts.ERROR):
+    def write_gridweights(self, transducer_id: str, grid_hash: str, grid_weights, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         grid_hashes = self.get_gridweight_hashes(transducer_id)
         if grid_hash in grid_hashes:
@@ -70,7 +70,7 @@ class Database:
             f.create_dataset("grid_weights", data=grid_weights)
         self.logger.info(f"Added grid weights with hash {grid_hash} for transducer {transducer_id} to the database.")
 
-    def write_user(self, user: User, on_conflict: OnConflictOpts = OnConflictOpts.ERROR) -> None:
+    def write_user(self, user: User, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR) -> None:
         on_conflict = _normalize_on_conflict(on_conflict)
         # Check if the sonication user ID already exists in the database
         user_id = user.id
@@ -96,7 +96,7 @@ class Database:
 
         self.logger.info(f"Added User with ID {user_id} to the database.")
 
-    def delete_user(self, user_id: str, on_conflict: OnConflictOpts = OnConflictOpts.ERROR) -> None:
+    def delete_user(self, user_id: str, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR) -> None:
         on_conflict = _normalize_on_conflict(on_conflict)
         # Check if the user ID already exists in the database
         user_ids = self.get_user_ids()
@@ -121,7 +121,7 @@ class Database:
 
         self.logger.info(f"Removed Sonication User with ID {user_id} from the database.")
 
-    def write_protocol(self, protocol: Protocol, on_conflict: OnConflictOpts = OnConflictOpts.ERROR):
+    def write_protocol(self, protocol: Protocol, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         # Check if the sonication protocol ID already exists in the database
         protocol_id = protocol.id
@@ -149,7 +149,7 @@ class Database:
 
         self.logger.info(f"Added Sonication Protocol with ID {protocol_id} to the database.")
 
-    def delete_protocol(self, protocol_id: str, on_conflict: OnConflictOpts = OnConflictOpts.ERROR):
+    def delete_protocol(self, protocol_id: str, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         # Check if the sonication protocol ID already exists in the database
         protocol_ids = self.get_protocol_ids()
@@ -174,7 +174,7 @@ class Database:
 
         self.logger.info(f"Removed Sonication Protocol with ID {protocol_id} from the database.")
 
-    def write_session(self, subject:Subject, session:Session, on_conflict=OnConflictOpts.ERROR):
+    def write_session(self, subject:Subject, session:Session, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         # Generate session ID
         session_id = session.id
@@ -240,7 +240,7 @@ class Database:
 
         self.logger.info(f"Added session with ID {session_id} for subject {subject.id} to the database.")
 
-    def delete_session(self, subject_id: str, session_id: str, on_conflict: OnConflictOpts = OnConflictOpts.ERROR):
+    def delete_session(self, subject_id: str, session_id: str, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         """Delete a session and its associated data from the database.
 
         Args:
@@ -271,7 +271,7 @@ class Database:
 
         self.logger.info(f"Removed session with ID {session_id} from the database.")
 
-    def write_run(self, run:Run, session:Session = None, protocol:Protocol = None, on_conflict=OnConflictOpts.ERROR):
+    def write_run(self, run:Run, session:Session = None, protocol:Protocol = None, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         """Write a run with a snapshot of session and a snapshot of protocol if provided
 
         Args:
@@ -313,7 +313,7 @@ class Database:
             # Write snapshot of the protocol
             protocol.to_file(run_metadata_filepath.parent / f'{run.id}_protocol_snapshot.json')
 
-    def write_subject(self, subject, on_conflict=OnConflictOpts.ERROR):
+    def write_subject(self, subject, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         subject_id = subject.id
         subject_ids = self.get_subject_ids()
@@ -349,7 +349,7 @@ class Database:
             transducer,
             registration_surface_model_filepath: PathLike | None = None,
             transducer_body_model_filepath: PathLike | None = None,
-            on_conflict: OnConflictOpts=OnConflictOpts.ERROR,
+            on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
     ) -> None:
         """ Writes a transducer object to database and copies the affiliated transducer data files to the database if provided. When a transducer that is already present in the database is being re-written,
         the associated model data files do not need to be provided if they have previously been added to the database.
@@ -410,7 +410,7 @@ class Database:
 
         self.logger.info(f"Added transducer with ID {transducer_id} to the database.")
 
-    def write_volume(self, subject_id, volume_id, volume_name, volume_data_filepath, on_conflict=OnConflictOpts.ERROR):
+    def write_volume(self, subject_id, volume_id, volume_name, volume_data_filepath, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         if not Path(volume_data_filepath).exists():
             raise ValueError(f'Volume data filepath does not exist: {volume_data_filepath}')
@@ -467,7 +467,7 @@ class Database:
             if temp_nifti_path is not None and temp_nifti_path.exists():
                 temp_nifti_path.unlink()
 
-    def write_photocollection(self, subject_id, session_id, reference_number: str, photo_paths: List[PathLike], on_conflict=OnConflictOpts.ERROR):
+    def write_photocollection(self, subject_id, session_id, reference_number: str, photo_paths: List[PathLike], on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         """ Writes a photocollection to database and copies the associated
         photos into the database, specified by the subject, session, and
         reference_number of the photocollection."""
@@ -504,7 +504,7 @@ class Database:
 
         self.logger.info(f"Added photocollection with reference number {reference_number} for session {session_id} to the database.")
 
-    def write_photoscan(self, subject_id, session_id, photoscan: Photoscan, model_data_filepath: str | None = None, texture_data_filepath: str | None = None, mtl_data_filepath: str | None = None, on_conflict=OnConflictOpts.ERROR):
+    def write_photoscan(self, subject_id, session_id, photoscan: Photoscan, model_data_filepath: str | None = None, texture_data_filepath: str | None = None, mtl_data_filepath: str | None = None, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         """ Writes a photoscan object to database and copies the associated data filepaths into the database.
         While the model data file is required, the associated texture and .mtl files are optional and can be provided if present.
         When a photoscan that is already present in the database is being re-written,the associated data files do not need to be specified """
@@ -566,7 +566,7 @@ class Database:
 
         self.logger.info(f"Added photoscan with ID {photoscan.id} for session {session_id} to the database.")
 
-    def write_solution(self, session:Session, solution:Solution, on_conflict: OnConflictOpts=OnConflictOpts.ERROR):
+    def write_solution(self, session:Session, solution:Solution, on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR):
         on_conflict = _normalize_on_conflict(on_conflict)
         solution_ids = self.get_solution_ids(session.subject_id, session.id)
 
