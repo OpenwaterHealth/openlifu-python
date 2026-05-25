@@ -93,6 +93,45 @@ def test_write_protocol(example_database: Database):
     reloaded_protocol = example_database.load_protocol(protocol.id)
     assert reloaded_protocol.name == "new_name"
 
+
+def test_on_conflict_accepts_enum_and_strings(example_database: Database):
+    assert OnConflictOpts.OVERWRITE.value == "overwrite"
+
+    protocol = Protocol(name="bleh", id="a_protocol_with_string_conflict_option")
+    example_database.write_protocol(protocol)
+
+    with pytest.raises(ValueError, match="already exists"):
+        example_database.write_protocol(protocol, on_conflict="ERROR")
+
+    protocol.name = "skipped_name"
+    example_database.write_protocol(protocol, on_conflict="SkIp")
+    reloaded_protocol = example_database.load_protocol(protocol.id)
+    assert reloaded_protocol.name == "bleh"
+
+    protocol.name = "overwritten_name"
+    example_database.write_protocol(protocol, on_conflict="OVERWRITE")
+    reloaded_protocol = example_database.load_protocol(protocol.id)
+    assert reloaded_protocol.name == "overwritten_name"
+
+    example_database.delete_protocol("non_existent_protocol", on_conflict="skip")
+
+    user = User(name="initial_name", id="a_user_with_string_conflict_option")
+    example_database.write_user(user)
+
+    user.name = "skipped_name"
+    example_database.write_user(user, on_conflict="skip")
+    reloaded_user = example_database.load_user(user.id)
+    assert reloaded_user.name == "initial_name"
+
+    user.name = "overwritten_name"
+    example_database.write_user(user, on_conflict="overwrite")
+    reloaded_user = example_database.load_user(user.id)
+    assert reloaded_user.name == "overwritten_name"
+
+    with pytest.raises(ValueError, match="Invalid 'on_conflict' option"):
+        example_database.write_protocol(protocol, on_conflict="replace")
+
+
 def test_delete_protocol(example_database: Database):
     # Write a protocol
     protocol = Protocol(name="bleh", id="a_protocol_to_be_deleted")
