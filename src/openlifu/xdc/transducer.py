@@ -120,10 +120,16 @@ class Transducer:
     module_invert: Annotated[List[bool], OpenLIFUFieldData("Invert polarity", "Whether to invert the polarity of the transducer output, per module")] = field(default_factory=lambda: [False])
     """Whether to invert the polarity of the transducer output"""
 
+    def _normalize_standoff_transform(self) -> None:
+        self.standoff_transform = np.array(self.standoff_transform, dtype=float)
+        if self.standoff_transform.shape != (4, 4):
+            raise ValueError("standoff_transform must be a 4x4 matrix.")
+
     def __post_init__(self):
         logging.info("Initializing transducer array")
         if self.name == "":
             self.name = self.id
+        self._normalize_standoff_transform()
         for element in self.elements:
             element.rescale(self.units)
         if self.sensitivity is None:
@@ -427,6 +433,7 @@ class Transducer:
             merged_array.module_invert += xform_array.module_invert
         for k, v in merged_attrs.items():
             merged_array.__setattr__(k, v)
+        merged_array._normalize_standoff_transform()
         return merged_array
 
     def numelements(self):
@@ -451,7 +458,7 @@ class Transducer:
     def to_dict(self):
         d = self.__dict__.copy()
         d["elements"] = [element.to_dict() for element in d["elements"]]
-        d["standoff_transform"] =  d["standoff_transform"].tolist()
+        d["standoff_transform"] = np.array(d["standoff_transform"], dtype=float).tolist()
         return d
 
     def to_file(self, filename):
