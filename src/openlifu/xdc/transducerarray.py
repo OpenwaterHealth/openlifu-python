@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
 from dataclasses import dataclass, field
 from typing import Sequence
@@ -10,6 +11,15 @@ import numpy as np
 from openlifu.util.dict_conversion import DictMixin
 from openlifu.util.units import getunitconversion
 from openlifu.xdc import Transducer, TransformedTransducer
+
+try:
+    from openlifu_sdk.io import LIFUInterface as _SDKLIFUInterface
+except ImportError:
+    _SDKLIFUInterface = None
+
+
+def _format_scalar(value: float, precision: int = 3) -> str:
+    return np.format_float_positional(float(value), precision=precision, trim="-")
 
 # Mapping from (num_connected_modules, freq_khz) to the canonical
 # template id consumed by :py:meth:`TransducerArray.get_connected`.
@@ -124,6 +134,93 @@ class TransducerArray(DictMixin):
     name: str = "Transducer Array"
     modules: list[TransformedTransducer] = field(default_factory=list)
     attrs: dict = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        total_elements = sum(m.numelements() for m in self.modules)
+        return (
+            "TransducerArray("
+            f"id='{self.id}', name='{self.name}', "
+            f"modules={len(self.modules)}, total_elements={total_elements}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        total_elements = sum(m.numelements() for m in self.modules)
+        lines = [
+            f"TransducerArray '{self.name}' ({self.id})",
+            f"  Modules: {len(self.modules)}",
+            f"  Total Elements: {total_elements}",
+        ]
+        if self.modules:
+            module_preview = [m.id for m in self.modules[:4]]
+            suffix = " ..." if len(self.modules) > 4 else ""
+            lines.append(f"  Module IDs: {', '.join(module_preview)}{suffix}")
+            lines.append(
+                "  Module HWIDs: "
+                + ", ".join(str((m.attrs or {}).get("hwid")) for m in self.modules[:4])
+                + (" ..." if len(self.modules) > 4 else "")
+            )
+        if self.attrs:
+            attr_keys = sorted(str(k) for k in self.attrs)
+            preview = ", ".join(attr_keys[:6])
+            lines.append(f"  Attr Keys ({len(attr_keys)}): {preview}{' ...' if len(attr_keys) > 6 else ''}")
+        return "\n".join(lines)
+
+    def _repr_pretty_(self, p, cycle: bool) -> None:
+        if cycle:
+            p.text("TransducerArray(...)")
+            return
+        p.text(str(self))
+
+    def _repr_html_(self) -> str:
+        total_elements = sum(m.numelements() for m in self.modules)
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("ID", html.escape(self.id)),
+            line("Name", html.escape(self.name)),
+            line("Total Elements", html.escape(str(total_elements))),
+        ]
+
+        module_rows = "".join(
+            "<details style='margin:3px 0;'>"
+            f"<summary style='cursor:pointer;'>"
+            f"Module {i}: {html.escape(m.id)} | {m.numelements()} elements | "
+            f"HWID={html.escape(str((m.attrs or {}).get('hwid')))} | "
+            f"t=[{_format_scalar(m.transform[0, 3])}, {_format_scalar(m.transform[1, 3])}, {_format_scalar(m.transform[2, 3])}]"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
+            f"{m._repr_html_()}"
+            "</div>"
+            "</details>"
+            for i, m in enumerate(self.modules)
+        )
+
+        attr_keys_line = line(
+            "Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")
+        )
+
+        return (
+            "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
+            "<div style='font-weight:600;margin-bottom:4px;'>TransducerArray</div>"
+            f"{''.join(summary_lines)}"
+            "<details style='margin:1px 0;'>"
+            f"<summary style='cursor:pointer;display:inline;'>"
+            f"<span style='font-weight:600;'>Modules:</span> {len(self.modules)}"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
+            f"{module_rows}"
+            "</div>"
+            "</details>"
+            f"{attr_keys_line}"
+            "</div>"
+        )
 
     def to_transducer(self, offset_pins=True, offset_indices=True):
         t = Transducer.merge([t.bake() for t in self.modules], offset_pins=offset_pins, offset_indices=offset_indices, merged_attrs=self.attrs)
@@ -430,14 +527,12 @@ class TransducerArray(DictMixin):
             A :class:`TransducerArray` representing the connected device.
         """
         if interface is None:
-            try:
-                from openlifu_sdk.io import LIFUInterface
-            except ImportError as exc:
+            if _SDKLIFUInterface is None:
                 raise ImportError(
                     "openlifu_sdk is required to auto-create a LIFUInterface; "
                     "install it or pass an explicit `interface=` argument."
-                ) from exc
-            interface = LIFUInterface()
+                )
+            interface = _SDKLIFUInterface()
 
         txdevice = interface.txdevice
         count = int(txdevice.get_tx_module_count())
@@ -463,7 +558,9 @@ class TransducerArray(DictMixin):
 
         # Resolve a template: prefer db lookup, fall back to embedded transforms.
         template: TransducerArray | None = None
-        template_id = _DEFAULT_TEMPLATE_IDS.get((count, freq))
+        template_id: str | None = None
+        if freq is not None:
+            template_id = _DEFAULT_TEMPLATE_IDS.get((count, int(freq)))
         if template_id is not None:
             if db is not None:
                 try:

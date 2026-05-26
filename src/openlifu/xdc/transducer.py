@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
 import logging
 from dataclasses import dataclass, field
@@ -43,6 +44,30 @@ def _combine_sensitivities(
         return [(float(f), float(v)) for (f, _), v in zip(scale_sensitivity, factor * values)]
     else:
         return float(base_sensitivity) * float(scale_sensitivity)
+
+
+def _format_scalar(value: float, precision: int = 3) -> str:
+    return np.format_float_positional(float(value), precision=precision, trim="-")
+
+
+def _format_sensitivity_summary(sensitivity: float | List[tuple[float, float]]) -> str:
+    if isinstance(sensitivity, list):
+        if not sensitivity:
+            return "[]"
+        low_f, low_v = sensitivity[0]
+        high_f, high_v = sensitivity[-1]
+        if len(sensitivity) == 1:
+            return (
+                f"[{_format_scalar(low_f, precision=0)} Hz: "
+                f"{_format_scalar(low_v)} Pa/V]"
+            )
+        return (
+            f"[{len(sensitivity)} pts, "
+            f"{_format_scalar(low_f, precision=0)}-"
+            f"{_format_scalar(high_f, precision=0)} Hz, "
+            f"{_format_scalar(low_v)}-{_format_scalar(high_v)} Pa/V]"
+        )
+    return f"{_format_scalar(sensitivity)} Pa/V"
 
 @dataclass
 class Transducer:
@@ -105,6 +130,111 @@ class Transducer:
             self.sensitivity = 1.0
         elif isinstance(self.sensitivity, list):
             self.sensitivity = sorted(((float(f), float(v)) for f, v in self.sensitivity), key=lambda t: t[0])
+
+    def __repr__(self) -> str:
+        return (
+            "Transducer("
+            f"id='{self.id}', name='{self.name}', "
+            f"elements={self.numelements()}, "
+            f"frequency={_format_scalar(self.frequency, precision=0)} Hz, "
+            f"units='{self.units}', "
+            f"sensitivity={_format_sensitivity_summary(self.sensitivity)}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        lines = [
+            f"Transducer '{self.name}' ({self.id})",
+            f"  Elements: {self.numelements()}",
+            f"  Frequency: {_format_scalar(self.frequency, precision=0)} Hz",
+            f"  Units: {self.units}",
+            f"  Sensitivity: {_format_sensitivity_summary(self.sensitivity)}",
+            f"  Crosstalk: frac={_format_scalar(self.crosstalk_frac)}, "
+            f"dist={_format_scalar(self.crosstalk_dist)} m",
+            f"  Meshes: registration={self.registration_surface_filename}, "
+            f"body={self.transducer_body_filename}",
+        ]
+        if self.attrs:
+            attr_keys = sorted(str(k) for k in self.attrs)
+            preview = ", ".join(attr_keys[:5])
+            suffix = " ..." if len(attr_keys) > 5 else ""
+            lines.append(f"  Attr Keys ({len(attr_keys)}): {preview}{suffix}")
+        return "\n".join(lines)
+
+    def _repr_pretty_(self, p, cycle: bool) -> None:
+        if cycle:
+            p.text("Transducer(...)")
+            return
+        p.text(str(self))
+
+    def _repr_html_(self) -> str:
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("ID", html.escape(self.id)),
+            line("Name", html.escape(self.name)),
+            line("Frequency", html.escape(f"{_format_scalar(self.frequency, precision=0)} Hz")),
+            line("Units", html.escape(self.units)),
+            line("Sensitivity", html.escape(_format_sensitivity_summary(self.sensitivity))),
+            line(
+                "Crosstalk",
+                html.escape(
+                    f"frac={_format_scalar(self.crosstalk_frac)}, "
+                    f"dist={_format_scalar(self.crosstalk_dist)} m"
+                ),
+            ),
+            line("Registration Mesh", html.escape(str(self.registration_surface_filename))),
+            line("Body Mesh", html.escape(str(self.transducer_body_filename))),
+            line("Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")),
+        ]
+
+        # Per-element sensitivity is the product of the element's stored
+        # sensitivity and the module's sensitivity. For frequency-dependent
+        # module sensitivity we evaluate it at the module's center frequency
+        # so the displayed per-element value matches what would be applied
+        # at the nominal drive frequency.
+        module_sens_at_f = sensitivity_at_frequency(self.sensitivity, self.frequency)
+
+        element_rows = "".join(
+            "<details style='margin:1px 0;'>"
+            "<summary style='cursor:pointer;'>"
+            f"<span style='display:inline-block;min-width:48px;'>#{element.index}</span>"
+            f"<span style='display:inline-block;min-width:56px;'>pin {element.pin}</span>"
+            f"<span style='display:inline-block;min-width:170px;'>pos [{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]</span>"
+            f"<span style='display:inline-block;min-width:120px;'>size [{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]</span>"
+            f"<span>{html.escape(_format_sensitivity_summary(_combine_sensitivities(element.sensitivity, module_sens_at_f)))}</span>"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
+            f"{element._repr_html_()}"
+            "</div>"
+            "</details>"
+            for element in self.elements
+        )
+
+        elements_section = (
+            "<details style='margin:1px 0;'>"
+            f"<summary style='cursor:pointer;display:inline;'>"
+            f"<span style='font-weight:600;'>Elements:</span> {self.numelements()}"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
+            f"{element_rows}"
+            "</div>"
+            "</details>"
+        )
+
+        return (
+            "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
+            "<div style='font-weight:600;margin-bottom:4px;'>Transducer</div>"
+            f"{''.join(summary_lines)}"
+            f"{elements_section}"
+            "</div>"
+        )
 
     def calc_output(self, cycles: float, frequency: float, dt: float, delays: np.ndarray = None, apod: np.ndarray = None, amplitude: float = 1.0) -> np.ndarray:
         if delays is None:

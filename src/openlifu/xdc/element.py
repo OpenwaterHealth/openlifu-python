@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import html
 from dataclasses import dataclass, field
 from typing import Annotated, List
 
@@ -50,6 +51,30 @@ def matrix2xyz(matrix):
     roll = np.arctan2(xyp, xxp)
     return x, y, z, az, el, roll
 
+
+def _format_scalar(value: float, precision: int = 3) -> str:
+    return np.format_float_positional(float(value), precision=precision, trim="-")
+
+
+def _format_sensitivity_summary(sensitivity: float | List[tuple[float, float]]) -> str:
+    if isinstance(sensitivity, list):
+        if not sensitivity:
+            return "[]"
+        low_f, low_v = sensitivity[0]
+        high_f, high_v = sensitivity[-1]
+        if len(sensitivity) == 1:
+            return (
+                f"[{_format_scalar(low_f, precision=0)} Hz: "
+                f"{_format_scalar(low_v)} Pa/V]"
+            )
+        return (
+            f"[{len(sensitivity)} pts, "
+            f"{_format_scalar(low_f, precision=0)}-"
+            f"{_format_scalar(high_f, precision=0)} Hz, "
+            f"{_format_scalar(low_v)}-{_format_scalar(high_v)} Pa/V]"
+        )
+    return f"{_format_scalar(sensitivity)} Pa/V"
+
 @dataclass
 class Element:
     index: Annotated[int, OpenLIFUFieldData("Element index", "Element index")] = 0
@@ -87,6 +112,103 @@ class Element:
             self.sensitivity = 1.0
         elif isinstance(self.sensitivity, list):
             self.sensitivity = sorted(((float(f), float(v)) for f, v in self.sensitivity), key=lambda t: t[0])
+
+    def __repr__(self) -> str:
+        pos = ", ".join(_format_scalar(v) for v in self.position)
+        size = ", ".join(_format_scalar(v) for v in self.size)
+        return (
+            "Element("
+            f"index={self.index}, pin={self.pin}, units='{self.units}', "
+            f"position=[{pos}], size=[{size}], "
+            f"sensitivity={_format_sensitivity_summary(self.sensitivity)}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        el_deg, az_deg, roll_deg = np.degrees([self.el, self.az, self.roll])
+        return "\n".join(
+            [
+                f"Element {self.index} (pin {self.pin})",
+                f"  Position [{self.units}]: "
+                f"x={_format_scalar(self.x)}, y={_format_scalar(self.y)}, z={_format_scalar(self.z)}",
+                f"  Orientation [deg]: "
+                f"az={_format_scalar(az_deg)}, el={_format_scalar(el_deg)}, roll={_format_scalar(roll_deg)}",
+                f"  Size [{self.units}]: "
+                f"width={_format_scalar(self.width)}, length={_format_scalar(self.length)}",
+                f"  Sensitivity: {_format_sensitivity_summary(self.sensitivity)}",
+            ]
+        )
+
+    def _repr_pretty_(self, p, cycle: bool) -> None:
+        if cycle:
+            p.text("Element(...)")
+            return
+        p.text(str(self))
+
+    def _repr_html_(self) -> str:
+        el_deg, az_deg, roll_deg = np.degrees([self.el, self.az, self.roll])
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("Index", html.escape(str(self.index))),
+            line("Pin", html.escape(str(self.pin))),
+            line("Units", html.escape(self.units)),
+            line(
+                "Position",
+                html.escape(
+                    f"[{_format_scalar(self.x)}, {_format_scalar(self.y)}, {_format_scalar(self.z)}]"
+                ),
+            ),
+            line(
+                "Orientation (deg)",
+                html.escape(
+                    f"[{_format_scalar(az_deg)}, {_format_scalar(el_deg)}, {_format_scalar(roll_deg)}]"
+                ),
+            ),
+            line(
+                "Size",
+                html.escape(f"[{_format_scalar(self.width)}, {_format_scalar(self.length)}]"),
+            ),
+        ]
+
+        sensitivity_section = ""
+        if isinstance(self.sensitivity, list):
+            sens_rows = "".join(
+                "<div style='margin:1px 0;'>"
+                f"<span style='display:inline-block;min-width:88px;'>{_format_scalar(freq, precision=0)} Hz</span>"
+                f"<span>{_format_scalar(value)} Pa/V</span>"
+                "</div>"
+                for freq, value in self.sensitivity
+            )
+            sensitivity_section = (
+                "<details style='margin:1px 0;'>"
+                f"<summary style='cursor:pointer;display:inline;'>"
+                f"<span style='font-weight:600;'>Sensitivity:</span> {html.escape(_format_sensitivity_summary(self.sensitivity))}"
+                "</summary>"
+                "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:220px;overflow:auto;'>"
+                f"{sens_rows}"
+                "</div>"
+                "</details>"
+            )
+        else:
+            sensitivity_section = line(
+                "Sensitivity",
+                html.escape(_format_sensitivity_summary(self.sensitivity)),
+            )
+
+        return (
+            "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
+            "<div style='font-weight:600;margin-bottom:4px;'>Element</div>"
+            f"{''.join(summary_lines)}"
+            f"{sensitivity_section}"
+            "</div>"
+        )
 
     @property
     def x(self):
