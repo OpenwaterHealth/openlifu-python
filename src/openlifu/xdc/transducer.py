@@ -393,6 +393,35 @@ class Transducer:
         else:
             return json.dumps(self.to_dict(), indent=4)
 
+    @classmethod
+    def from_module_user_config(cls, user_config: dict) -> Transducer:
+        """Build a single-module ``Transducer`` from a module ``user_config`` dict.
+
+        The dict is expected to follow the structure produced by the SDK's
+        :py:meth:`openlifu_sdk.io.LIFUTXDevice.TxDevice.read_config`: a top-level
+        record with a nested ``"module"`` sub-dict whose fields are the kwargs
+        for :py:meth:`gen_matrix_array` (``nx``, ``ny``, ``pitch``, ``kerf``,
+        plus any ``Transducer`` fields such as ``frequency``, ``sensitivity``,
+        ``crosstalk_frac``, ``crosstalk_dist``, ``id``, ``name``). The
+        top-level ``"hwid"`` is preserved in the resulting transducer's
+        ``attrs`` dict under the key ``"hwid"`` so callers can identify the
+        physical module later.
+
+        Mesh filenames, standoff transforms, and any other per-module data
+        that cannot be carried in the user_config remain at their dataclass
+        defaults; supply a template via :py:meth:`TransducerArray.from_module_user_configs`
+        to inject those.
+        """
+        module_cfg = (user_config.get("module") or {})
+        if not module_cfg:
+            raise ValueError("user_config has no 'module' sub-dict")
+        t = cls.gen_matrix_array(**module_cfg)
+        hwid = user_config.get("hwid")
+        if hwid is not None:
+            t.attrs = dict(t.attrs)
+            t.attrs["hwid"] = hwid
+        return t
+
     @staticmethod
     def gen_matrix_array(nx=2, ny=2, pitch=1, kerf=0, units="mm", **kwargs):
         """Generate a 2D flat matrix array
