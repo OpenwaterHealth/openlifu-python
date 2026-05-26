@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -395,3 +396,310 @@ def test_element_in_transducer_sensitivity_from_json_is_list_of_tuples():
     assert all(isinstance(pair, tuple) for pair in el_sensitivity)
     assert all(isinstance(f, float) and isinstance(v, float) for f, v in el_sensitivity)
     assert el_sensitivity == [(100e3, 5.0), (300e3, 9.0)]
+
+
+# ---------------------------------------------------------------------------
+# Module user_config integration
+# ---------------------------------------------------------------------------
+
+def _example_module_user_config(hwid: str = "ABCD1234") -> dict:
+    return {
+        "sn": "EVT2B-400K-TEST",
+        "hwid": hwid,
+        "freq": 400,
+        "module": {
+            "id": f"txm_400_{hwid.lower()}",
+            "name": f"TXM 400kHz ({hwid})",
+            "nx": 8,
+            "ny": 8,
+            "pitch": 5,
+            "frequency": 400000.0,
+            "kerf": 0.3,
+            "crosstalk_frac": 0.12,
+            "crosstalk_dist": 0.00505,
+            "sensitivity": [(400e3, 2800.0), (405e3, 1950.0)],
+        },
+        "device": {},
+    }
+
+
+def test_transducer_from_module_user_config():
+    cfg = _example_module_user_config(hwid="HW1")
+    t = Transducer.from_module_user_config(cfg)
+    assert isinstance(t, Transducer)
+    assert t.numelements() == 64
+    assert t.id == "txm_400_hw1"
+    assert t.frequency == 400000.0
+    assert t.attrs["hwid"] == "HW1"
+    assert t.sensitivity == [(400e3, 2800.0), (405e3, 1950.0)]
+
+
+def test_transducer_from_module_user_config_missing_module():
+    with pytest.raises(ValueError, match="no 'module'"):
+        Transducer.from_module_user_config({"hwid": "X"})
+
+
+def test_transducer_array_from_module_user_configs_bare():
+    cfgs = [_example_module_user_config("HW1"), _example_module_user_config("HW2")]
+    arr = TransducerArray.from_module_user_configs(cfgs)
+    assert isinstance(arr, TransducerArray)
+    assert len(arr.modules) == 2
+    assert arr.id == "transducer_array"
+    # No template/device/override -> identity transforms.
+    for m in arr.modules:
+        np.testing.assert_allclose(m.transform, np.eye(4))
+    assert {m.attrs.get("hwid") for m in arr.modules} == {"HW1", "HW2"}
+
+
+def test_transducer_array_from_module_user_configs_with_device_field():
+    cfg1 = _example_module_user_config("HW1")
+    cfg2 = _example_module_user_config("HW2")
+    cfg1["device"] = {
+        "id": "test_array",
+        "name": "Test Array",
+        "modules": [
+            {"hwid": "HW2", "transform": np.diag([1, 1, 1, 1]).tolist()},
+            {"hwid": "HW1",
+             "transform": [[1, 0, 0, 10.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]},
+        ],
+        "attrs": {"registration_surface_filename": "x.obj"},
+    }
+    arr = TransducerArray.from_module_user_configs([cfg1, cfg2])
+    assert arr.id == "test_array"
+    assert arr.name == "Test Array"
+    assert arr.attrs["registration_surface_filename"] == "x.obj"
+    # HW1 is module index 0 but its transform is keyed by hwid -> the
+    # (10, 0, 0) offset must end up on module 0, not module 1.
+    np.testing.assert_allclose(arr.modules[0].transform[0, 3], 10.0)
+    np.testing.assert_allclose(arr.modules[1].transform, np.eye(4))
+
+
+def test_transducer_array_from_module_user_configs_with_template():
+    cfgs = [_example_module_user_config("HW1"), _example_module_user_config("HW2")]
+    # Build a template with mesh metadata + nontrivial transforms.
+    base_template = TransducerArray.get_concave_cylinder(
+        Transducer.gen_matrix_array(nx=8, ny=8, pitch=5, kerf=0.3, units="mm"),
+        rows=1, cols=2, width=40, gap=0.0, units="mm",
+        id="template_array", name="Template Array",
+        attrs={"registration_surface_filename": "tpl.obj"},
+    )
+    for m in base_template.modules:
+        m.registration_surface_filename = "module.surf.obj"
+        m.transducer_body_filename = "module.body.obj"
+
+    arr = TransducerArray.from_module_user_configs(cfgs, template=base_template)
+    assert arr.id == "template_array"
+    assert arr.attrs["registration_surface_filename"] == "tpl.obj"
+    for m in arr.modules:
+        assert m.registration_surface_filename == "module.surf.obj"
+        assert m.transducer_body_filename == "module.body.obj"
+    # Template's transforms should propagate when no device/override provided.
+    np.testing.assert_allclose(arr.modules[0].transform, base_template.modules[0].transform)
+
+
+def test_transducer_array_from_module_user_configs_module_transforms_override():
+    cfgs = [_example_module_user_config("HW1"), _example_module_user_config("HW2")]
+    cfgs[0]["device"] = {
+        "id": "x",
+        "name": "x",
+        "modules": [
+            {"hwid": "HW1", "transform": np.eye(4).tolist()},
+            {"hwid": "HW2", "transform": np.eye(4).tolist()},
+        ],
+        "attrs": {},
+    }
+    overrides = [
+        np.array([[1, 0, 0, 1.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float),
+        np.array([[1, 0, 0, 2.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float),
+    ]
+    arr = TransducerArray.from_module_user_configs(cfgs, module_transforms=overrides)
+    np.testing.assert_allclose(arr.modules[0].transform[0, 3], 1.0)
+    np.testing.assert_allclose(arr.modules[1].transform[0, 3], 2.0)
+
+
+def test_transducer_array_to_device_config_roundtrip():
+    cfg1 = _example_module_user_config("HW1")
+    cfg2 = _example_module_user_config("HW2")
+    cfg1["device"] = {
+        "id": "rt_array",
+        "name": "Roundtrip Array",
+        "modules": [
+            {"hwid": "HW1",
+             "transform": [[1, 0, 0, 5.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]},
+            {"hwid": "HW2",
+             "transform": [[1, 0, 0, -5.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]},
+        ],
+        "attrs": {"standoff_transform": np.eye(4).tolist()},
+    }
+    arr = TransducerArray.from_module_user_configs([cfg1, cfg2])
+    device_dict = arr.to_device_config()
+    assert device_dict["id"] == "rt_array"
+    assert [m["hwid"] for m in device_dict["modules"]] == ["HW1", "HW2"]
+    np.testing.assert_allclose(device_dict["modules"][0]["transform"][0][3], 5.0)
+    np.testing.assert_allclose(device_dict["modules"][1]["transform"][0][3], -5.0)
+
+
+def test_transducer_array_from_module_user_configs_empty_raises():
+    with pytest.raises(ValueError, match="at least one user_config"):
+        TransducerArray.from_module_user_configs([])
+
+
+def test_transducer_array_from_module_user_configs_length_mismatch_raises():
+    cfgs = [_example_module_user_config("HW1")]
+    with pytest.raises(ValueError, match="module_transforms length"):
+        TransducerArray.from_module_user_configs(cfgs, module_transforms=[np.eye(4), np.eye(4)])
+
+
+def test_transducer_array_from_module_user_configs_explicit_arr_id_name_override():
+    cfg1 = _example_module_user_config("HW1")
+    cfg2 = _example_module_user_config("HW2")
+    cfg1["device"] = {
+        "id": "from_device",
+        "name": "From Device",
+        "modules": [
+            {"hwid": "HW1", "transform": np.eye(4).tolist()},
+            {"hwid": "HW2", "transform": np.eye(4).tolist()},
+        ],
+        "attrs": {},
+    }
+    arr = TransducerArray.from_module_user_configs(
+        [cfg1, cfg2], arr_id="explicit_id", arr_name="Explicit Name",
+    )
+    assert arr.id == "explicit_id"
+    assert arr.name == "Explicit Name"
+
+
+def test_transducer_array_from_module_user_configs_arr_id_falls_through():
+    """No explicit arg / no device id -> template id is used."""
+    cfgs = [_example_module_user_config("HW1"), _example_module_user_config("HW2")]
+    template = TransducerArray.get_concave_cylinder(
+        Transducer.gen_matrix_array(nx=8, ny=8, pitch=5, kerf=0.3, units="mm"),
+        rows=1, cols=2, width=40, gap=0.0, units="mm",
+        id="tpl_id", name="Tpl Name",
+    )
+    arr = TransducerArray.from_module_user_configs(cfgs, template=template)
+    assert arr.id == "tpl_id"
+    assert arr.name == "Tpl Name"
+
+
+class _FakeUserConfig:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def get_json_str(self) -> str:
+        return json.dumps(self._payload)
+
+
+class _FakeTxDevice:
+    def __init__(self, configs: list[dict]):
+        self._configs = configs
+
+    def get_tx_module_count(self) -> int:
+        return len(self._configs)
+
+    def read_config(self, module: int = 0):
+        return _FakeUserConfig(self._configs[module])
+
+
+class _FakeInterface:
+    def __init__(self, configs: list[dict]):
+        self.txdevice = _FakeTxDevice(configs)
+
+
+def _user_cfg_for_freq(hwid: str, freq_khz: int) -> dict:
+    cfg = _example_module_user_config(hwid)
+    cfg["freq"] = freq_khz
+    cfg["module"]["frequency"] = float(freq_khz) * 1e3
+    return cfg
+
+
+def test_transducer_array_get_connected_no_db_2x400():
+    """No db -> meshless embedded template, but transforms applied."""
+    interface = _FakeInterface([_user_cfg_for_freq("HW1", 400), _user_cfg_for_freq("HW2", 400)])
+    arr = TransducerArray.get_connected(interface=interface)
+    assert arr.id == "openlifu_2x400"
+    assert len(arr.modules) == 2
+    # Transforms from the embedded default should be applied (not identity).
+    np.testing.assert_allclose(arr.modules[0].transform[0, 3], 25.84571998794554)
+    np.testing.assert_allclose(arr.modules[1].transform[0, 3], -25.84571998794554)
+    # Standoff transform present, no mesh filenames in the meshless fallback.
+    assert "standoff_transform" in arr.attrs
+    assert arr.attrs.get("registration_surface_filename") is None
+
+
+def test_transducer_array_get_connected_no_db_1x400():
+    interface = _FakeInterface([_user_cfg_for_freq("HW1", 400)])
+    arr = TransducerArray.get_connected(interface=interface)
+    assert arr.id == "openlifu_1x400"
+    assert len(arr.modules) == 1
+    np.testing.assert_allclose(arr.modules[0].transform, np.eye(4))
+
+
+def test_transducer_array_get_connected_mismatched_freqs_raises():
+    interface = _FakeInterface([_user_cfg_for_freq("HW1", 400), _user_cfg_for_freq("HW2", 155)])
+    with pytest.raises(ValueError, match="mismatched frequencies"):
+        TransducerArray.get_connected(interface=interface)
+
+
+def test_transducer_array_get_connected_with_db_uses_template_meshes():
+    """A db that returns a TransducerArray template should provide mesh filenames."""
+    template = TransducerArray.get_concave_cylinder(
+        Transducer.gen_matrix_array(nx=8, ny=8, pitch=5, kerf=0.3, units="mm"),
+        rows=1, cols=2, width=40, gap=0.0, units="mm",
+        id="openlifu_2x400", name="OpenLIFU 2x 400kHz",
+        attrs={
+            "registration_surface_filename": "fake.surf.obj",
+            "transducer_body_filename": "fake.body.obj",
+        },
+    )
+    for m in template.modules:
+        m.registration_surface_filename = "module.surf.obj"
+        m.transducer_body_filename = "module.body.obj"
+
+    class _FakeDb:
+        def load_transducer(self, transducer_id, convert_array=True):
+            assert transducer_id == "openlifu_2x400"
+            assert convert_array is False
+            return template
+
+    interface = _FakeInterface([_user_cfg_for_freq("HW1", 400), _user_cfg_for_freq("HW2", 400)])
+    arr = TransducerArray.get_connected(interface=interface, db=_FakeDb())
+    assert arr.attrs["registration_surface_filename"] == "fake.surf.obj"
+    assert arr.modules[0].registration_surface_filename == "module.surf.obj"
+
+
+def test_transducer_array_get_connected_explicit_overrides():
+    interface = _FakeInterface([_user_cfg_for_freq("HW1", 400), _user_cfg_for_freq("HW2", 400)])
+    overrides = [
+        np.array([[1, 0, 0, 1.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float),
+        np.array([[1, 0, 0, 2.0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float),
+    ]
+    arr = TransducerArray.get_connected(
+        interface=interface,
+        arr_id="my_array", arr_name="My Array",
+        module_transforms=overrides,
+    )
+    assert arr.id == "my_array"
+    assert arr.name == "My Array"
+    np.testing.assert_allclose(arr.modules[0].transform[0, 3], 1.0)
+    np.testing.assert_allclose(arr.modules[1].transform[0, 3], 2.0)
+
+
+def test_transducer_array_get_connected_no_modules_raises():
+    interface = _FakeInterface([])
+    with pytest.raises(RuntimeError):
+        TransducerArray.get_connected(interface=interface)
+
+
+def test_transducer_array_get_connected_unknown_combo_no_template():
+    """Unknown (n, freq) combo -> no template, identity transforms."""
+    interface = _FakeInterface([
+        _user_cfg_for_freq("HW1", 250),
+        _user_cfg_for_freq("HW2", 250),
+        _user_cfg_for_freq("HW3", 250),
+    ])
+    arr = TransducerArray.get_connected(interface=interface)
+    # No template id matched (3, 250) -> bare default
+    assert arr.id == "transducer_array"
+    for m in arr.modules:
+        np.testing.assert_allclose(m.transform, np.eye(4))
