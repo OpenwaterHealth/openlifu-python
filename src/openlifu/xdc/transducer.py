@@ -174,60 +174,50 @@ class Transducer:
         p.text(str(self))
 
     def _repr_html_(self) -> str:
-        rows = [
-            ("ID", self.id),
-            ("Name", self.name),
-            ("Elements", str(self.numelements())),
-            ("Frequency", f"{_format_scalar(self.frequency, precision=0)} Hz"),
-            ("Units", self.units),
-            ("Sensitivity", _format_sensitivity_summary(self.sensitivity)),
-            (
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("ID", html.escape(self.id)),
+            line("Name", html.escape(self.name)),
+            line("Frequency", html.escape(f"{_format_scalar(self.frequency, precision=0)} Hz")),
+            line("Units", html.escape(self.units)),
+            line("Sensitivity", html.escape(_format_sensitivity_summary(self.sensitivity))),
+            line(
                 "Crosstalk",
-                f"frac={_format_scalar(self.crosstalk_frac)}, "
-                f"dist={_format_scalar(self.crosstalk_dist)} {self.units}",
+                html.escape(
+                    f"frac={_format_scalar(self.crosstalk_frac)}, "
+                    f"dist={_format_scalar(self.crosstalk_dist)} {self.units}"
+                ),
             ),
-            ("Registration Mesh", str(self.registration_surface_filename)),
-            ("Body Mesh", str(self.transducer_body_filename)),
-            ("Attr Keys", ", ".join(sorted(str(k) for k in self.attrs)) or "-"),
+            line("Registration Mesh", html.escape(str(self.registration_surface_filename))),
+            line("Body Mesh", html.escape(str(self.transducer_body_filename))),
+            line("Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")),
         ]
 
-        row_html = "".join(
-            "<tr>"
-            f"<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(k)}</th>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(v)}</td>"
-            "</tr>"
-            for k, v in rows
-        )
-
         element_rows = "".join(
-            "<tr>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{element.index}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{element.pin}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>"
-            f"[{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]"
-            "</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>"
-            f"[{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]"
-            "</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(_format_sensitivity_summary(element.sensitivity))}</td>"
-            "</tr>"
+            "<div style='margin:1px 0;'>"
+            f"<span style='display:inline-block;min-width:48px;'>#{element.index}</span>"
+            f"<span style='display:inline-block;min-width:56px;'>pin {element.pin}</span>"
+            f"<span style='display:inline-block;min-width:170px;'>pos [{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]</span>"
+            f"<span style='display:inline-block;min-width:120px;'>size [{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]</span>"
+            f"<span>{html.escape(_format_sensitivity_summary(element.sensitivity))}</span>"
+            "</div>"
             for element in self.elements
         )
 
         elements_section = (
-            "<details style='margin-top:8px;'>"
-            f"<summary style='cursor:pointer;'>Elements ({self.numelements()})</summary>"
+            "<details style='margin:1px 0;'>"
+            f"<summary style='cursor:pointer;display:inline;'>"
+            f"<span style='font-weight:600;'>Elements:</span> {self.numelements()}"
+            "</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
-            "<table style='border-collapse:collapse;width:auto;min-width:520px;'>"
-            "<thead><tr>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Index</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Pin</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Position</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Size</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Sensitivity</th>"
-            "</tr></thead>"
-            f"<tbody>{element_rows}</tbody>"
-            "</table>"
+            f"{element_rows}"
             "</div>"
             "</details>"
         )
@@ -235,9 +225,7 @@ class Transducer:
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>Transducer</div>"
-            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
-            f"<tbody>{row_html}</tbody>"
-            "</table>"
+            f"{''.join(summary_lines)}"
             f"{elements_section}"
             "</div>"
         )

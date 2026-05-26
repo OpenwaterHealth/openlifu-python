@@ -174,38 +174,28 @@ class TransducerArray(DictMixin):
 
     def _repr_html_(self) -> str:
         total_elements = sum(m.numelements() for m in self.modules)
-        summary_rows = [
-            ("ID", self.id),
-            ("Name", self.name),
-            ("Modules", str(len(self.modules))),
-            ("Total Elements", str(total_elements)),
-            ("Attr Keys", ", ".join(sorted(str(k) for k in self.attrs)) or "-"),
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("ID", html.escape(self.id)),
+            line("Name", html.escape(self.name)),
+            line("Total Elements", html.escape(str(total_elements))),
+            line("Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")),
         ]
-        summary_html = "".join(
-            "<tr>"
-            f"<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(k)}</th>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(v)}</td>"
-            "</tr>"
-            for k, v in summary_rows
-        )
 
         module_rows = "".join(
-            "<tr>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{i}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(m.id)}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{m.numelements()}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(str((m.attrs or {}).get('hwid')))}</td>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>"
-            f"x={_format_scalar(m.transform[0, 3])}, "
-            f"y={_format_scalar(m.transform[1, 3])}, "
-            f"z={_format_scalar(m.transform[2, 3])}</td>"
-            "</tr>"
-            for i, m in enumerate(self.modules)
-        )
-
-        module_sections = "".join(
-            "<details style='margin-top:6px;'>"
-            f"<summary style='cursor:pointer;'>Module {i}: {html.escape(m.id)} ({m.numelements()} elements)</summary>"
+            "<details style='margin:3px 0;'>"
+            f"<summary style='cursor:pointer;'>"
+            f"Module {i}: {html.escape(m.id)} | {m.numelements()} elements | "
+            f"HWID={html.escape(str((m.attrs or {}).get('hwid')))} | "
+            f"t=[{_format_scalar(m.transform[0, 3])}, {_format_scalar(m.transform[1, 3])}, {_format_scalar(m.transform[2, 3])}]"
+            "</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
             f"{m._repr_html_()}"
             "</div>"
@@ -216,28 +206,13 @@ class TransducerArray(DictMixin):
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>TransducerArray</div>"
-            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
-            f"<tbody>{summary_html}</tbody>"
-            "</table>"
-            "<details style='margin-top:8px;'>"
-            f"<summary style='cursor:pointer;'>Modules ({len(self.modules)})</summary>"
-            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:300px;overflow:auto;'>"
-            "<table style='border-collapse:collapse;width:auto;min-width:620px;'>"
-            "<thead><tr>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>#</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Module ID</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Elements</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>HWID</th>"
-            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Transform t</th>"
-            "</tr></thead>"
-            f"<tbody>{module_rows}</tbody>"
-            "</table>"
-            "</div>"
-            "</details>"
-            "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;'>Module Details</summary>"
-            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            f"{module_sections}"
+            f"{''.join(summary_lines)}"
+            "<details style='margin:1px 0;'>"
+            f"<summary style='cursor:pointer;display:inline;'>"
+            f"<span style='font-weight:600;'>Modules:</span> {len(self.modules)}"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
+            f"{module_rows}"
             "</div>"
             "</details>"
             "</div>"

@@ -147,62 +147,65 @@ class Element:
 
     def _repr_html_(self) -> str:
         el_deg, az_deg, roll_deg = np.degrees([self.el, self.az, self.roll])
-        rows = [
-            ("Index", str(self.index)),
-            ("Pin", str(self.pin)),
-            ("Units", self.units),
-            (
+        def line(label: str, value_html: str) -> str:
+            return (
+                "<div style='margin:1px 0;'>"
+                f"<span style='font-weight:600;'>{html.escape(label)}:</span> "
+                f"{value_html}"
+                "</div>"
+            )
+
+        summary_lines = [
+            line("Index", html.escape(str(self.index))),
+            line("Pin", html.escape(str(self.pin))),
+            line("Units", html.escape(self.units)),
+            line(
                 "Position",
-                f"[{_format_scalar(self.x)}, {_format_scalar(self.y)}, {_format_scalar(self.z)}]",
+                html.escape(
+                    f"[{_format_scalar(self.x)}, {_format_scalar(self.y)}, {_format_scalar(self.z)}]"
+                ),
             ),
-            (
+            line(
                 "Orientation (deg)",
-                f"[{_format_scalar(az_deg)}, {_format_scalar(el_deg)}, {_format_scalar(roll_deg)}]",
+                html.escape(
+                    f"[{_format_scalar(az_deg)}, {_format_scalar(el_deg)}, {_format_scalar(roll_deg)}]"
+                ),
             ),
-            (
+            line(
                 "Size",
-                f"[{_format_scalar(self.width)}, {_format_scalar(self.length)}]",
+                html.escape(f"[{_format_scalar(self.width)}, {_format_scalar(self.length)}]"),
             ),
-            ("Sensitivity", _format_sensitivity_summary(self.sensitivity)),
         ]
-        row_html = "".join(
-            "<tr>"
-            f"<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(k)}</th>"
-            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(v)}</td>"
-            "</tr>"
-            for k, v in rows
-        )
 
         sensitivity_section = ""
         if isinstance(self.sensitivity, list):
             sens_rows = "".join(
-                "<tr>"
-                f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{_format_scalar(freq, precision=0)}</td>"
-                f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{_format_scalar(value)}</td>"
-                "</tr>"
+                "<div style='margin:1px 0;'>"
+                f"<span style='display:inline-block;min-width:88px;'>{_format_scalar(freq, precision=0)} Hz</span>"
+                f"<span>{_format_scalar(value)} Pa/V</span>"
+                "</div>"
                 for freq, value in self.sensitivity
             )
             sensitivity_section = (
-                "<details style='margin-top:8px;'>"
-                "<summary style='cursor:pointer;'>Sensitivity Table</summary>"
+                "<details style='margin:1px 0;'>"
+                f"<summary style='cursor:pointer;display:inline;'>"
+                f"<span style='font-weight:600;'>Sensitivity:</span> {html.escape(_format_sensitivity_summary(self.sensitivity))}"
+                "</summary>"
                 "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:220px;overflow:auto;'>"
-                "<table style='border-collapse:collapse;width:100%;'>"
-                "<thead><tr>"
-                "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Frequency (Hz)</th>"
-                "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Sensitivity (Pa/V)</th>"
-                "</tr></thead>"
-                f"<tbody>{sens_rows}</tbody>"
-                "</table>"
+                f"{sens_rows}"
                 "</div>"
                 "</details>"
+            )
+        else:
+            sensitivity_section = line(
+                "Sensitivity",
+                html.escape(_format_sensitivity_summary(self.sensitivity)),
             )
 
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>Element</div>"
-            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
-            f"<tbody>{row_html}</tbody>"
-            "</table>"
+            f"{''.join(summary_lines)}"
             f"{sensitivity_section}"
             "</div>"
         )
