@@ -184,15 +184,62 @@ class Transducer:
             ("Body Mesh", str(self.transducer_body_filename)),
             ("Attr Keys", ", ".join(sorted(str(k) for k in self.attrs)) or "-"),
         ]
+
         row_html = "".join(
-            f"<tr><th style='text-align:left;padding:2px 8px 2px 0;'>{html.escape(k)}</th>"
-            f"<td style='padding:2px 0;'>{html.escape(v)}</td></tr>"
+            "<tr>"
+            f"<th style='text-align:left;padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;'>{html.escape(k)}</th>"
+            f"<td style='padding:6px 10px;border:1px solid #ddd;'>{html.escape(v)}</td>"
+            "</tr>"
             for k, v in rows
         )
+
+        element_rows = "".join(
+            "<tr>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{element.index}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{element.pin}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>"
+            f"[{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]"
+            "</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>"
+            f"[{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]"
+            "</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{html.escape(_format_sensitivity_summary(element.sensitivity))}</td>"
+            "</tr>"
+            for element in self.elements
+        )
+
+        elements_section = (
+            "<details style='margin-top:8px;' open>"
+            f"<summary style='cursor:pointer;font-weight:600;'>Elements ({self.numelements()})</summary>"
+            "<div style='max-height:340px;overflow:auto;margin-top:6px;'>"
+            "<table style='border-collapse:collapse;width:100%;'>"
+            "<thead><tr>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Index</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Pin</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Position</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Size</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Sensitivity</th>"
+            "</tr></thead>"
+            f"<tbody>{element_rows}</tbody>"
+            "</table>"
+            "</div>"
+            "</details>"
+        )
+
+        raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
-            "<div style='font-family:ui-monospace,monospace;'>"
-            "<div style='font-weight:600;margin-bottom:4px;'>Transducer</div>"
-            f"<table>{row_html}</table>"
+            "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
+            "<div style='font-weight:700;margin-bottom:6px;'>Transducer</div>"
+            "<table style='border-collapse:collapse;width:100%;'>"
+            f"<tbody>{row_html}</tbody>"
+            "</table>"
+            f"{elements_section}"
+            "<details style='margin-top:8px;'>"
+            "<summary style='cursor:pointer;font-weight:600;'>Raw JSON</summary>"
+            "<pre style='margin-top:6px;padding:8px;border:1px solid #ddd;background:#fafafa;overflow:auto;max-height:360px;'>"
+            f"{raw_json}"
+            "</pre>"
+            "</details>"
             "</div>"
         )
 

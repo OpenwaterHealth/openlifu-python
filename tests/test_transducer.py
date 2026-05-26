@@ -723,7 +723,7 @@ def test_element_pretty_repr_methods():
     assert "Position [mm]" in pretty_text
 
     html_repr = element._repr_html_()
-    assert "<table>" in html_repr
+    assert "<table" in html_repr
     assert "Sensitivity" in html_repr
 
 
@@ -746,7 +746,7 @@ def test_transducer_pretty_repr_methods():
     assert "Elements: 4" in pretty_text
 
     html_repr = transducer._repr_html_()
-    assert "<table>" in html_repr
+    assert "<table" in html_repr
     assert "Frequency" in html_repr
 
 

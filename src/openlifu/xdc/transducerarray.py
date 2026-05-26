@@ -174,36 +174,77 @@ class TransducerArray(DictMixin):
 
     def _repr_html_(self) -> str:
         total_elements = sum(m.numelements() for m in self.modules)
+        summary_rows = [
+            ("ID", self.id),
+            ("Name", self.name),
+            ("Modules", str(len(self.modules))),
+            ("Total Elements", str(total_elements)),
+            ("Attr Keys", ", ".join(sorted(str(k) for k in self.attrs)) or "-"),
+        ]
+        summary_html = "".join(
+            "<tr>"
+            f"<th style='text-align:left;padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;'>{html.escape(k)}</th>"
+            f"<td style='padding:6px 10px;border:1px solid #ddd;'>{html.escape(v)}</td>"
+            "</tr>"
+            for k, v in summary_rows
+        )
+
         module_rows = "".join(
             "<tr>"
-            f"<td style='padding:2px 6px;'>{i}</td>"
-            f"<td style='padding:2px 6px;'>{html.escape(m.id)}</td>"
-            f"<td style='padding:2px 6px;'>{m.numelements()}</td>"
-            f"<td style='padding:2px 6px;'>{html.escape(str((m.attrs or {}).get('hwid')))}</td>"
-            f"<td style='padding:2px 6px;'>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{i}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{html.escape(m.id)}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{m.numelements()}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{html.escape(str((m.attrs or {}).get('hwid')))}</td>"
+            f"<td style='padding:4px 8px;border:1px solid #ddd;'>"
             f"x={_format_scalar(m.transform[0, 3])}, "
             f"y={_format_scalar(m.transform[1, 3])}, "
             f"z={_format_scalar(m.transform[2, 3])}</td>"
             "</tr>"
             for i, m in enumerate(self.modules)
         )
-        attr_text = ", ".join(sorted(str(k) for k in self.attrs)) or "-"
+
+        module_sections = "".join(
+            "<details style='margin-top:6px;'>"
+            f"<summary style='cursor:pointer;'>Module {i}: {html.escape(m.id)} ({m.numelements()} elements)</summary>"
+            "<div style='margin-top:6px;'>"
+            f"{m._repr_html_()}"
+            "</div>"
+            "</details>"
+            for i, m in enumerate(self.modules)
+        )
+
+        raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
-            "<div style='font-family:ui-monospace,monospace;'>"
-            "<div style='font-weight:600;margin-bottom:4px;'>TransducerArray</div>"
-            f"<div>ID: {html.escape(self.id)} | Name: {html.escape(self.name)}</div>"
-            f"<div>Modules: {len(self.modules)} | Total Elements: {total_elements}</div>"
-            f"<div>Attr Keys: {html.escape(attr_text)}</div>"
-            "<table style='margin-top:6px;border-collapse:collapse;'>"
+            "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
+            "<div style='font-weight:700;margin-bottom:6px;'>TransducerArray</div>"
+            "<table style='border-collapse:collapse;width:100%;'>"
+            f"<tbody>{summary_html}</tbody>"
+            "</table>"
+            "<details style='margin-top:8px;' open>"
+            f"<summary style='cursor:pointer;font-weight:600;'>Modules ({len(self.modules)})</summary>"
+            "<div style='max-height:300px;overflow:auto;margin-top:6px;'>"
+            "<table style='border-collapse:collapse;width:100%;'>"
             "<thead><tr>"
-            "<th style='text-align:left;padding:2px 6px;'>#</th>"
-            "<th style='text-align:left;padding:2px 6px;'>Module ID</th>"
-            "<th style='text-align:left;padding:2px 6px;'>Elements</th>"
-            "<th style='text-align:left;padding:2px 6px;'>HWID</th>"
-            "<th style='text-align:left;padding:2px 6px;'>Transform t</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>#</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Module ID</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Elements</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>HWID</th>"
+            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Transform t</th>"
             "</tr></thead>"
             f"<tbody>{module_rows}</tbody>"
             "</table>"
+            "</div>"
+            "</details>"
+            "<details style='margin-top:8px;'>"
+            "<summary style='cursor:pointer;font-weight:600;'>Module Details</summary>"
+            f"{module_sections}"
+            "</details>"
+            "<details style='margin-top:8px;'>"
+            "<summary style='cursor:pointer;font-weight:600;'>Raw JSON</summary>"
+            "<pre style='margin-top:6px;padding:8px;border:1px solid #ddd;background:#fafafa;overflow:auto;max-height:420px;'>"
+            f"{raw_json}"
+            "</pre>"
+            "</details>"
             "</div>"
         )
 
