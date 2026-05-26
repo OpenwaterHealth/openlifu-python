@@ -703,3 +703,73 @@ def test_transducer_array_get_connected_unknown_combo_no_template():
     assert arr.id == "transducer_array"
     for m in arr.modules:
         np.testing.assert_allclose(m.transform, np.eye(4))
+
+
+def test_element_pretty_repr_methods():
+    element = Element(
+        index=7,
+        pin=11,
+        position=[1.0, -2.0, 3.0],
+        size=[4.0, 5.0],
+        units="mm",
+    )
+    text_repr = repr(element)
+    assert "Element(" in text_repr
+    assert "index=7" in text_repr
+    assert "pin=11" in text_repr
+
+    pretty_text = str(element)
+    assert "Element 7" in pretty_text
+    assert "Position [mm]" in pretty_text
+
+    html_repr = element._repr_html_()
+    assert "<table>" in html_repr
+    assert "Sensitivity" in html_repr
+
+
+def test_transducer_pretty_repr_methods():
+    transducer = Transducer.gen_matrix_array(
+        nx=2,
+        ny=2,
+        pitch=5,
+        kerf=0.3,
+        units="mm",
+        id="demo_tx",
+        name="Demo TX",
+    )
+    text_repr = repr(transducer)
+    assert "Transducer(" in text_repr
+    assert "elements=4" in text_repr
+
+    pretty_text = str(transducer)
+    assert "Transducer 'Demo TX'" in pretty_text
+    assert "Elements: 4" in pretty_text
+
+    html_repr = transducer._repr_html_()
+    assert "<table>" in html_repr
+    assert "Frequency" in html_repr
+
+
+def test_transducer_array_pretty_repr_methods():
+    module = Transducer.gen_matrix_array(nx=1, ny=1, pitch=5, kerf=0.3, units="mm")
+    arr = TransducerArray.get_concave_cylinder(
+        module,
+        rows=1,
+        cols=2,
+        width=40,
+        gap=0.0,
+        units="mm",
+        id="arr_demo",
+        name="Array Demo",
+    )
+    text_repr = repr(arr)
+    assert "TransducerArray(" in text_repr
+    assert "modules=2" in text_repr
+
+    pretty_text = str(arr)
+    assert "TransducerArray 'Array Demo'" in pretty_text
+    assert "Modules: 2" in pretty_text
+
+    html_repr = arr._repr_html_()
+    assert "<table" in html_repr
+    assert "Module ID" in html_repr

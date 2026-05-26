@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import html
 from dataclasses import dataclass, field
 from typing import Annotated, List
 
@@ -50,6 +51,30 @@ def matrix2xyz(matrix):
     roll = np.arctan2(xyp, xxp)
     return x, y, z, az, el, roll
 
+
+def _format_scalar(value: float, precision: int = 3) -> str:
+    return np.format_float_positional(float(value), precision=precision, trim="-")
+
+
+def _format_sensitivity_summary(sensitivity: float | List[tuple[float, float]]) -> str:
+    if isinstance(sensitivity, list):
+        if not sensitivity:
+            return "[]"
+        low_f, low_v = sensitivity[0]
+        high_f, high_v = sensitivity[-1]
+        if len(sensitivity) == 1:
+            return (
+                f"[{_format_scalar(low_f, precision=0)} Hz: "
+                f"{_format_scalar(low_v)} Pa/V]"
+            )
+        return (
+            f"[{len(sensitivity)} pts, "
+            f"{_format_scalar(low_f, precision=0)}-"
+            f"{_format_scalar(high_f, precision=0)} Hz, "
+            f"{_format_scalar(low_v)}-{_format_scalar(high_v)} Pa/V]"
+        )
+    return f"{_format_scalar(sensitivity)} Pa/V"
+
 @dataclass
 class Element:
     index: Annotated[int, OpenLIFUFieldData("Element index", "Element index")] = 0
@@ -87,6 +112,70 @@ class Element:
             self.sensitivity = 1.0
         elif isinstance(self.sensitivity, list):
             self.sensitivity = sorted(((float(f), float(v)) for f, v in self.sensitivity), key=lambda t: t[0])
+
+    def __repr__(self) -> str:
+        pos = ", ".join(_format_scalar(v) for v in self.position)
+        size = ", ".join(_format_scalar(v) for v in self.size)
+        return (
+            "Element("
+            f"index={self.index}, pin={self.pin}, units='{self.units}', "
+            f"position=[{pos}], size=[{size}], "
+            f"sensitivity={_format_sensitivity_summary(self.sensitivity)}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        el_deg, az_deg, roll_deg = np.degrees([self.el, self.az, self.roll])
+        return "\n".join(
+            [
+                f"Element {self.index} (pin {self.pin})",
+                f"  Position [{self.units}]: "
+                f"x={_format_scalar(self.x)}, y={_format_scalar(self.y)}, z={_format_scalar(self.z)}",
+                f"  Orientation [deg]: "
+                f"az={_format_scalar(az_deg)}, el={_format_scalar(el_deg)}, roll={_format_scalar(roll_deg)}",
+                f"  Size [{self.units}]: "
+                f"width={_format_scalar(self.width)}, length={_format_scalar(self.length)}",
+                f"  Sensitivity: {_format_sensitivity_summary(self.sensitivity)}",
+            ]
+        )
+
+    def _repr_pretty_(self, p, cycle: bool) -> None:
+        if cycle:
+            p.text("Element(...)")
+            return
+        p.text(str(self))
+
+    def _repr_html_(self) -> str:
+        el_deg, az_deg, roll_deg = np.degrees([self.el, self.az, self.roll])
+        rows = [
+            ("Index", str(self.index)),
+            ("Pin", str(self.pin)),
+            ("Units", self.units),
+            (
+                "Position",
+                f"[{_format_scalar(self.x)}, {_format_scalar(self.y)}, {_format_scalar(self.z)}]",
+            ),
+            (
+                "Orientation (deg)",
+                f"[{_format_scalar(az_deg)}, {_format_scalar(el_deg)}, {_format_scalar(roll_deg)}]",
+            ),
+            (
+                "Size",
+                f"[{_format_scalar(self.width)}, {_format_scalar(self.length)}]",
+            ),
+            ("Sensitivity", _format_sensitivity_summary(self.sensitivity)),
+        ]
+        row_html = "".join(
+            f"<tr><th style='text-align:left;padding:2px 8px 2px 0;'>{html.escape(k)}</th>"
+            f"<td style='padding:2px 0;'>{html.escape(v)}</td></tr>"
+            for k, v in rows
+        )
+        return (
+            "<div style='font-family:ui-monospace,monospace;'>"
+            "<div style='font-weight:600;margin-bottom:4px;'>Element</div>"
+            f"<table>{row_html}</table>"
+            "</div>"
+        )
 
     @property
     def x(self):
