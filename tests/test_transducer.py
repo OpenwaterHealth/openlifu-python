@@ -117,6 +117,28 @@ def test_transducer_array_to_transducer_data_types(transducer_array_id):
         assert isinstance(transducer.elements[0], Element)
 
 
+def test_transducer_array_to_transducer_normalizes_list_standoff_transform_for_repr():
+    transducer = Transducer.gen_matrix_array(nx=1, ny=1, pitch=5, kerf=0.3, units="mm")
+    arr = TransducerArray.get_concave_cylinder(
+        transducer,
+        rows=1,
+        cols=1,
+        width=40,
+        gap=0.0,
+        units="mm",
+        attrs={
+            # Reproduces get_connected/device-config path where this can be a list.
+            "standoff_transform": np.eye(4).tolist(),
+        },
+    )
+    merged = arr.to_transducer()
+    assert isinstance(merged.standoff_transform, np.ndarray)
+    np.testing.assert_allclose(merged.standoff_transform, np.eye(4))
+    # Regression guard: rich repr serialization should not raise.
+    html_repr = merged._repr_html_()
+    assert "Elements" in html_repr
+
+
 def test_transducer_calc_output_interpolates_dictionary_sensitivity():
     transducer = Transducer.gen_matrix_array(
         nx=1,
