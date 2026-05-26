@@ -168,8 +168,8 @@ class Element:
         ]
         row_html = "".join(
             "<tr>"
-            f"<th style='text-align:left;padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;'>{html.escape(k)}</th>"
-            f"<td style='padding:6px 10px;border:1px solid #ddd;'>{html.escape(v)}</td>"
+            f"<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(k)}</th>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(v)}</td>"
             "</tr>"
             for k, v in rows
         )
@@ -178,19 +178,19 @@ class Element:
         if isinstance(self.sensitivity, list):
             sens_rows = "".join(
                 "<tr>"
-                f"<td style='padding:4px 8px;border:1px solid #ddd;'>{_format_scalar(freq, precision=0)}</td>"
-                f"<td style='padding:4px 8px;border:1px solid #ddd;'>{_format_scalar(value)}</td>"
+                f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{_format_scalar(freq, precision=0)}</td>"
+                f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{_format_scalar(value)}</td>"
                 "</tr>"
                 for freq, value in self.sensitivity
             )
             sensitivity_section = (
                 "<details style='margin-top:8px;'>"
-                "<summary style='cursor:pointer;font-weight:600;'>Sensitivity Table</summary>"
-                "<div style='max-height:220px;overflow:auto;margin-top:6px;'>"
+                "<summary style='cursor:pointer;'>Sensitivity Table</summary>"
+                "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:220px;overflow:auto;'>"
                 "<table style='border-collapse:collapse;width:100%;'>"
                 "<thead><tr>"
-                "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Frequency (Hz)</th>"
-                "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Sensitivity (Pa/V)</th>"
+                "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Frequency (Hz)</th>"
+                "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Sensitivity (Pa/V)</th>"
                 "</tr></thead>"
                 f"<tbody>{sens_rows}</tbody>"
                 "</table>"
@@ -201,16 +201,18 @@ class Element:
         raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
-            "<div style='font-weight:700;margin-bottom:6px;'>Element</div>"
+            "<div style='font-weight:600;margin-bottom:4px;'>Element</div>"
             "<table style='border-collapse:collapse;width:100%;'>"
             f"<tbody>{row_html}</tbody>"
             "</table>"
             f"{sensitivity_section}"
             "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;font-weight:600;'>Raw JSON</summary>"
-            "<pre style='margin-top:6px;padding:8px;border:1px solid #ddd;background:#fafafa;overflow:auto;max-height:320px;'>"
+            "<summary style='cursor:pointer;'>Raw JSON</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
+            "<pre style='margin:0;padding:6px;border:1px solid rgba(127,127,127,0.35);overflow:auto;max-height:320px;'>"
             f"{raw_json}"
             "</pre>"
+            "</div>"
             "</details>"
             "</div>"
         )

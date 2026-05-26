@@ -187,38 +187,38 @@ class Transducer:
 
         row_html = "".join(
             "<tr>"
-            f"<th style='text-align:left;padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;'>{html.escape(k)}</th>"
-            f"<td style='padding:6px 10px;border:1px solid #ddd;'>{html.escape(v)}</td>"
+            f"<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(k)}</th>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(v)}</td>"
             "</tr>"
             for k, v in rows
         )
 
         element_rows = "".join(
             "<tr>"
-            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{element.index}</td>"
-            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{element.pin}</td>"
-            f"<td style='padding:4px 8px;border:1px solid #ddd;'>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{element.index}</td>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{element.pin}</td>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>"
             f"[{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]"
             "</td>"
-            f"<td style='padding:4px 8px;border:1px solid #ddd;'>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>"
             f"[{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]"
             "</td>"
-            f"<td style='padding:4px 8px;border:1px solid #ddd;'>{html.escape(_format_sensitivity_summary(element.sensitivity))}</td>"
+            f"<td style='padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>{html.escape(_format_sensitivity_summary(element.sensitivity))}</td>"
             "</tr>"
             for element in self.elements
         )
 
         elements_section = (
-            "<details style='margin-top:8px;' open>"
-            f"<summary style='cursor:pointer;font-weight:600;'>Elements ({self.numelements()})</summary>"
-            "<div style='max-height:340px;overflow:auto;margin-top:6px;'>"
+            "<details style='margin-top:8px;'>"
+            f"<summary style='cursor:pointer;'>Elements ({self.numelements()})</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
             "<table style='border-collapse:collapse;width:100%;'>"
             "<thead><tr>"
-            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Index</th>"
-            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Pin</th>"
-            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Position</th>"
-            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Size</th>"
-            "<th style='text-align:left;padding:4px 8px;border:1px solid #ddd;background:#f2f2f2;'>Sensitivity</th>"
+            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Index</th>"
+            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Pin</th>"
+            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Position</th>"
+            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Size</th>"
+            "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Sensitivity</th>"
             "</tr></thead>"
             f"<tbody>{element_rows}</tbody>"
             "</table>"
@@ -229,16 +229,18 @@ class Transducer:
         raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
-            "<div style='font-weight:700;margin-bottom:6px;'>Transducer</div>"
+            "<div style='font-weight:600;margin-bottom:4px;'>Transducer</div>"
             "<table style='border-collapse:collapse;width:100%;'>"
             f"<tbody>{row_html}</tbody>"
             "</table>"
             f"{elements_section}"
             "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;font-weight:600;'>Raw JSON</summary>"
-            "<pre style='margin-top:6px;padding:8px;border:1px solid #ddd;background:#fafafa;overflow:auto;max-height:360px;'>"
+            "<summary style='cursor:pointer;'>Raw JSON</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
+            "<pre style='margin:0;padding:6px;border:1px solid rgba(127,127,127,0.35);overflow:auto;max-height:360px;'>"
             f"{raw_json}"
             "</pre>"
+            "</div>"
             "</details>"
             "</div>"
         )
