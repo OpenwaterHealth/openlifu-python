@@ -218,7 +218,7 @@ class Transducer:
             "<details style='margin-top:8px;'>"
             f"<summary style='cursor:pointer;'>Elements ({self.numelements()})</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:340px;overflow:auto;'>"
-            "<table style='border-collapse:collapse;width:100%;'>"
+            "<table style='border-collapse:collapse;width:auto;min-width:520px;'>"
             "<thead><tr>"
             "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Index</th>"
             "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Pin</th>"
@@ -232,22 +232,13 @@ class Transducer:
             "</details>"
         )
 
-        raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>Transducer</div>"
-            "<table style='border-collapse:collapse;width:100%;'>"
+            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
             f"<tbody>{row_html}</tbody>"
             "</table>"
             f"{elements_section}"
-            "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;'>Raw JSON</summary>"
-            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            "<pre style='margin:0;padding:6px;border:1px solid rgba(127,127,127,0.35);overflow:auto;max-height:360px;'>"
-            f"{raw_json}"
-            "</pre>"
-            "</div>"
-            "</details>"
             "</div>"
         )
 

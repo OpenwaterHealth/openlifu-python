@@ -136,7 +136,7 @@ def test_transducer_array_to_transducer_normalizes_list_standoff_transform_for_r
     np.testing.assert_allclose(merged.standoff_transform, np.eye(4))
     # Regression guard: rich repr serialization should not raise.
     html_repr = merged._repr_html_()
-    assert "Raw JSON" in html_repr
+    assert "Elements" in html_repr
 
 
 def test_transducer_calc_output_interpolates_dictionary_sensitivity():

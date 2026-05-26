@@ -213,17 +213,16 @@ class TransducerArray(DictMixin):
             for i, m in enumerate(self.modules)
         )
 
-        raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>TransducerArray</div>"
-            "<table style='border-collapse:collapse;width:100%;'>"
+            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
             f"<tbody>{summary_html}</tbody>"
             "</table>"
             "<details style='margin-top:8px;'>"
             f"<summary style='cursor:pointer;'>Modules ({len(self.modules)})</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);max-height:300px;overflow:auto;'>"
-            "<table style='border-collapse:collapse;width:100%;'>"
+            "<table style='border-collapse:collapse;width:auto;min-width:620px;'>"
             "<thead><tr>"
             "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>#</th>"
             "<th style='text-align:left;padding:3px 8px;border:1px solid rgba(127,127,127,0.35);'>Module ID</th>"
@@ -239,14 +238,6 @@ class TransducerArray(DictMixin):
             "<summary style='cursor:pointer;'>Module Details</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
             f"{module_sections}"
-            "</div>"
-            "</details>"
-            "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;'>Raw JSON</summary>"
-            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            "<pre style='margin:0;padding:6px;border:1px solid rgba(127,127,127,0.35);overflow:auto;max-height:420px;'>"
-            f"{raw_json}"
-            "</pre>"
             "</div>"
             "</details>"
             "</div>"

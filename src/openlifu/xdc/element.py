@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import html
-import json
 from dataclasses import dataclass, field
 from typing import Annotated, List
 
@@ -198,22 +197,13 @@ class Element:
                 "</details>"
             )
 
-        raw_json = html.escape(json.dumps(self.to_dict(), indent=2))
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>Element</div>"
-            "<table style='border-collapse:collapse;width:100%;'>"
+            "<table style='border-collapse:collapse;width:auto;display:inline-table;'>"
             f"<tbody>{row_html}</tbody>"
             "</table>"
             f"{sensitivity_section}"
-            "<details style='margin-top:8px;'>"
-            "<summary style='cursor:pointer;'>Raw JSON</summary>"
-            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            "<pre style='margin:0;padding:6px;border:1px solid rgba(127,127,127,0.35);overflow:auto;max-height:320px;'>"
-            f"{raw_json}"
-            "</pre>"
-            "</div>"
-            "</details>"
             "</div>"
         )
 
