@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import html
 import json
+import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -157,6 +159,61 @@ def _build_meshless_default_template(template_id: str) -> TransducerArray:
         modules.append(TransformedTransducer.from_transducer(t, transform=np.array(tform, dtype=float)))
     attrs = {"standoff_transform": np.array(spec["standoff_transform"], dtype=float)}
     return TransducerArray(id=template_id, name=spec["name"], modules=modules, attrs=attrs)
+
+
+def _canonicalize_array_for_compare(arr: TransducerArray) -> dict:
+    """Produce a structure suitable for equality-comparing two :class:`TransducerArray`.
+
+    Normalizations applied:
+
+    * NumPy arrays are converted to nested lists and rounded so trivial
+      floating-point noise does not trigger spurious mismatches.
+    * Mesh filename fields (``registration_surface_filename``,
+      ``transducer_body_filename``) are reduced to their basename so absolute
+      vs database-relative paths are treated as equivalent.
+    * Fields that legitimately vary between a reconstructed array and a
+      database-stored one (e.g. ``impulse_response`` / ``impulse_dt`` from
+      calibration) are dropped.
+
+    Used by :py:meth:`TransducerArray.get_connected` to warn when the array
+    assembled from connected hardware disagrees with the same-id array in
+    the supplied database.
+    """
+    def _norm(obj):
+        if isinstance(obj, np.ndarray):
+            return _norm(obj.tolist())
+        if isinstance(obj, (list, tuple)):
+            return [_norm(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: _norm(v) for k, v in obj.items()}
+        if isinstance(obj, float):
+            return round(obj, 6)
+        return obj
+
+    raw = _norm(arr.to_dict())
+    # Strip per-module fields that do not need to round-trip identically.
+    for m in raw.get("modules", []):
+        for k in ("registration_surface_filename", "transducer_body_filename"):
+            v = m.get(k)
+            if isinstance(v, str) and v:
+                m[k] = os.path.basename(v)
+        attrs = m.get("attrs") or {}
+        attrs.pop("impulse_response", None)
+        attrs.pop("impulse_dt", None)
+    # Strip array-level mesh paths likewise.
+    arr_attrs = raw.get("attrs") or {}
+    for k in ("registration_surface_filename", "transducer_body_filename"):
+        v = arr_attrs.get(k)
+        if isinstance(v, str) and v:
+            arr_attrs[k] = os.path.basename(v)
+    arr_attrs.pop("impulse_response", None)
+    arr_attrs.pop("impulse_dt", None)
+    return raw
+
+
+def arrays_structurally_equal(a: TransducerArray, b: TransducerArray) -> bool:
+    """Return ``True`` if two arrays are equal after :func:`_canonicalize_array_for_compare`."""
+    return _canonicalize_array_for_compare(a) == _canonicalize_array_for_compare(b)
 
 
 def get_angle_from_gap(width, gap, roc):
@@ -643,13 +700,36 @@ class TransducerArray(DictMixin):
             if template is None and use_default_template and template_id in _DEFAULT_TEMPLATE_DATA:
                 template = _build_meshless_default_template(template_id)
 
-        return cls.from_module_user_configs(
+        arr = cls.from_module_user_configs(
             user_configs,
             template=template,
             module_transforms=module_transforms,
             arr_id=arr_id,
             arr_name=arr_name,
         )
+
+        # If a database was supplied and an array with the resolved id is
+        # already stored there, compare the two and warn on a mismatch so
+        # callers (e.g. the SlicerOpenLIFU Transducer Manager) can surface
+        # a UI prompt.
+        if db is not None:
+            try:
+                known_ids = list(db.get_transducer_ids() or [])
+            except Exception:
+                known_ids = []
+            if arr.id in known_ids:
+                try:
+                    db_arr = db.load_transducer(arr.id, convert_array=False)
+                except Exception:
+                    db_arr = None
+                if isinstance(db_arr, TransducerArray) and not arrays_structurally_equal(arr, db_arr):
+                    warnings.warn(
+                        f"Connected transducer '{arr.id}' differs from the version "
+                        f"stored in the database. The database version was not used.",
+                        stacklevel=2,
+                    )
+
+        return arr
 
     def to_device_config(self) -> dict:
         """Serialize array-level info to a ``device`` dict for the lead module's user_config.
