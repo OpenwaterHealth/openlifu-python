@@ -95,6 +95,59 @@ _DEFAULT_TEMPLATE_DATA: dict[str, dict] = {
 }
 
 
+class DeviceConfigMismatchError(ValueError):
+    """Raised when a stored ``device`` block does not match the connected hardware.
+
+    The ``device`` block (typically stored on the lead module's ``user_config``
+    via :py:meth:`TransducerArray.to_device_config` or written by the test app's
+    "Add Device Configuration" dialog) records the expected module count and
+    each module's ``hwid``. :py:meth:`TransducerArray.get_connected` validates
+    the connected hardware against that block before assembling an array.
+    """
+
+
+def _validate_device_config_against_connected(
+    device_cfg: dict,
+    user_configs: Sequence[dict],
+) -> None:
+    """Check a stored ``device`` block matches the connected modules.
+
+    Validates module count and, when ``hwid`` values are recorded on both
+    sides, that the set of HWIDs matches (order-insensitive). Module entries
+    in ``device_cfg`` without an ``hwid`` field are skipped for the HWID
+    comparison so partially-populated configs do not falsely fail.
+
+    Raises:
+        DeviceConfigMismatchError: if the count or the HWID sets disagree.
+    """
+    expected_modules = list(device_cfg.get("modules") or [])
+    if len(expected_modules) != len(user_configs):
+        raise DeviceConfigMismatchError(
+            f"Device config '{device_cfg.get('id')}' lists {len(expected_modules)} "
+            f"module(s) but {len(user_configs)} module(s) are connected."
+        )
+
+    expected_hwids = {
+        m["hwid"]
+        for m in expected_modules
+        if isinstance(m, dict) and m.get("hwid")
+    }
+    if not expected_hwids:
+        # No HWIDs to compare; count match alone is acceptable.
+        return
+    connected_hwids = {
+        c.get("hwid") for c in user_configs if c.get("hwid")
+    }
+    missing = expected_hwids - connected_hwids
+    extra = connected_hwids - expected_hwids
+    if missing or extra:
+        raise DeviceConfigMismatchError(
+            f"Device config '{device_cfg.get('id')}' HWIDs do not match connected "
+            f"hardware. Missing from connected: {sorted(missing)!r}; "
+            f"unexpected on connected: {sorted(extra)!r}."
+        )
+
+
 def _build_meshless_default_template(template_id: str) -> TransducerArray:
     """Build a meshless template :class:`TransducerArray` from embedded transforms."""
     spec = _DEFAULT_TEMPLATE_DATA[template_id]
@@ -479,9 +532,19 @@ class TransducerArray(DictMixin):
     ) -> TransducerArray:
         """Read ``user_config`` from every connected TX module and build a :class:`TransducerArray`.
 
-        Picks a default template based on the number of connected modules
-        and the per-module ``freq`` value (which must agree across modules
-        when more than one is connected). The mapping is:
+        If the lead module's ``user_config`` contains a ``device`` block
+        (typically written by :py:meth:`to_device_config` or by the test app's
+        "Add Device Configuration" dialog), it is validated against the
+        connected hardware first: the number of modules listed must match the
+        number of connected modules, and the recorded base58 ``hwid`` values
+        must match the ones reported by the connected modules. A mismatch
+        raises :class:`DeviceConfigMismatchError`. When the ``device`` block
+        carries a ``"template"`` field, that template id is preferred for the
+        ``db`` lookup over the default ``(n_modules, freq)`` mapping below.
+
+        Otherwise, picks a default template based on the number of connected
+        modules and the per-module ``freq`` value (which must agree across
+        modules when more than one is connected). The mapping is:
 
         ====================== =====================
         ``(n_modules, freq)``  template id
@@ -552,10 +615,22 @@ class TransducerArray(DictMixin):
             )
         freq = next(iter(freqs)) if freqs else None
 
+        # If the lead module's user_config contains a ``device`` block,
+        # validate it against the connected hardware *before* doing anything
+        # else, and prefer its recorded template id over the (count, freq)
+        # default mapping.
+        device_cfg = user_configs[0].get("device") or None
+        device_template_id: str | None = None
+        if device_cfg:
+            _validate_device_config_against_connected(device_cfg, user_configs)
+            tid = device_cfg.get("template")
+            if isinstance(tid, str) and tid:
+                device_template_id = tid
+
         # Resolve a template: prefer db lookup, fall back to embedded transforms.
         template: TransducerArray | None = None
-        template_id: str | None = None
-        if freq is not None:
+        template_id: str | None = device_template_id
+        if template_id is None and freq is not None:
             template_id = _DEFAULT_TEMPLATE_IDS.get((count, int(freq)))
         if template_id is not None:
             if db is not None:
