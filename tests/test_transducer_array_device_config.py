@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Sequence
+import warnings
 
 import pytest
 
@@ -12,6 +13,7 @@ from openlifu.xdc import DeviceConfigMismatchError, TransducerArray
 from openlifu.xdc.transducerarray import (
     _DEFAULT_TEMPLATE_IDS,
     _validate_device_config_against_connected,
+    arrays_structurally_equal,
 )
 
 
@@ -156,3 +158,76 @@ def test_get_connected_validates_count_mismatch():
             db=None,
             use_default_template=True,
         )
+
+
+# ---------- db-comparison warning ----------
+
+class _FakeDB:
+    """Stand-in for openlifu.db.Database for the db-mismatch warning test."""
+
+    def __init__(self, stored: dict[str, TransducerArray]):
+        self._stored = stored
+
+    def get_transducer_ids(self):
+        return list(self._stored)
+
+    def load_transducer(self, transducer_id: str, convert_array: bool = True):
+        return self._stored.get(transducer_id)
+
+
+def test_get_connected_warns_when_db_copy_differs():
+    user_configs = [
+        {
+            **_module_user_config("AAA", freq=400),
+            "device": {
+                "id": "my-array",
+                "name": "My Array",
+                "template": "openlifu_1x400",
+                "modules": [{"hwid": "AAA"}],
+                "attrs": {},
+            },
+        }
+    ]
+    # Build a stored array with a clearly different name to force a mismatch.
+    stored = TransducerArray.get_connected(
+        interface=_fake_interface(user_configs), db=None
+    )
+    stored.name = "Something Different"
+    fake_db = _FakeDB({"my-array": stored})
+
+    with pytest.warns(UserWarning, match="differs from the version stored"):
+        TransducerArray.get_connected(
+            interface=_fake_interface(user_configs),
+            db=fake_db,
+            use_default_template=True,
+        )
+
+
+def test_get_connected_does_not_warn_when_db_copy_matches():
+    user_configs = [_module_user_config("AAA", freq=400)]
+    # First call without db produces the canonical array; stash a copy.
+    stored = TransducerArray.get_connected(
+        interface=_fake_interface(user_configs), db=None
+    )
+    fake_db = _FakeDB({stored.id: stored})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # promote any UserWarning to an error
+        TransducerArray.get_connected(
+            interface=_fake_interface(user_configs),
+            db=fake_db,
+            use_default_template=True,
+        )
+
+
+def test_arrays_structurally_equal_handles_path_basename_normalization():
+    a = TransducerArray.get_connected(
+        interface=_fake_interface([_module_user_config("AAA", freq=400)]), db=None
+    )
+    b = TransducerArray.get_connected(
+        interface=_fake_interface([_module_user_config("AAA", freq=400)]), db=None
+    )
+    # Inject differently-prefixed mesh paths that share a basename.
+    b.modules[0].registration_surface_filename = "/abs/path/regsurf.stl"
+    a.modules[0].registration_surface_filename = "regsurf.stl"
+    assert arrays_structurally_equal(a, b)
+
