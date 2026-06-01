@@ -151,7 +151,9 @@ class Cloud:
         self._components.clear()
         self._components.append(Users(self._api, self._db_path, self._db.id, self._sync_thread))
         self._components.append(Protocols(self._api, self._db_path, self._db.id, self._sync_thread))
-        self._components.append(Systems(self._api, self._db_path, self._db.id, self._sync_thread))
+        # Systems are managed elsewhere and the per-database "systems"
+        # folder is no longer part of the local database layout, so the
+        # Systems sync component is intentionally not registered here.
         self._components.append(Transducers(self._api, self._db_path, self._db.id, self._sync_thread))
         self._components.append(
             Subjects(self._api, self._db_path, self._db.id, self._sync_thread)
