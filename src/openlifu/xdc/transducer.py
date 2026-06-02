@@ -156,7 +156,7 @@ class Transducer:
             f"  Units: {self.units}",
             f"  Sensitivity: {_format_sensitivity_summary(self.sensitivity)}",
             f"  Crosstalk: frac={_format_scalar(self.crosstalk_frac)}, "
-            f"dist={_format_scalar(self.crosstalk_dist)} {self.units}",
+            f"dist={_format_scalar(self.crosstalk_dist)} m",
             f"  Meshes: registration={self.registration_surface_filename}, "
             f"body={self.transducer_body_filename}",
         ]
@@ -192,7 +192,7 @@ class Transducer:
                 "Crosstalk",
                 html.escape(
                     f"frac={_format_scalar(self.crosstalk_frac)}, "
-                    f"dist={_format_scalar(self.crosstalk_dist)} {self.units}"
+                    f"dist={_format_scalar(self.crosstalk_dist)} m"
                 ),
             ),
             line("Registration Mesh", html.escape(str(self.registration_surface_filename))),
@@ -200,14 +200,26 @@ class Transducer:
             line("Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")),
         ]
 
+        # Per-element sensitivity is the product of the element's stored
+        # sensitivity and the module's sensitivity. For frequency-dependent
+        # module sensitivity we evaluate it at the module's center frequency
+        # so the displayed per-element value matches what would be applied
+        # at the nominal drive frequency.
+        module_sens_at_f = sensitivity_at_frequency(self.sensitivity, self.frequency)
+
         element_rows = "".join(
-            "<div style='margin:1px 0;'>"
+            "<details style='margin:1px 0;'>"
+            "<summary style='cursor:pointer;'>"
             f"<span style='display:inline-block;min-width:48px;'>#{element.index}</span>"
             f"<span style='display:inline-block;min-width:56px;'>pin {element.pin}</span>"
             f"<span style='display:inline-block;min-width:170px;'>pos [{_format_scalar(element.position[0])}, {_format_scalar(element.position[1])}, {_format_scalar(element.position[2])}]</span>"
             f"<span style='display:inline-block;min-width:120px;'>size [{_format_scalar(element.size[0])}, {_format_scalar(element.size[1])}]</span>"
-            f"<span>{html.escape(_format_sensitivity_summary(element.sensitivity))}</span>"
+            f"<span>{html.escape(_format_sensitivity_summary(_combine_sensitivities(element.sensitivity, module_sens_at_f)))}</span>"
+            "</summary>"
+            "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
+            f"{element._repr_html_()}"
             "</div>"
+            "</details>"
             for element in self.elements
         )
 

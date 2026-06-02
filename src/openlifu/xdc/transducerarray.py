@@ -296,7 +296,6 @@ class TransducerArray(DictMixin):
             line("ID", html.escape(self.id)),
             line("Name", html.escape(self.name)),
             line("Total Elements", html.escape(str(total_elements))),
-            line("Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")),
         ]
 
         module_rows = "".join(
@@ -313,6 +312,10 @@ class TransducerArray(DictMixin):
             for i, m in enumerate(self.modules)
         )
 
+        attr_keys_line = line(
+            "Attr Keys", html.escape(", ".join(sorted(str(k) for k in self.attrs)) or "-")
+        )
+
         return (
             "<div style='font-family:ui-monospace,monospace;line-height:1.35;'>"
             "<div style='font-weight:600;margin-bottom:4px;'>TransducerArray</div>"
@@ -325,6 +328,7 @@ class TransducerArray(DictMixin):
             f"{module_rows}"
             "</div>"
             "</details>"
+            f"{attr_keys_line}"
             "</div>"
         )
 
