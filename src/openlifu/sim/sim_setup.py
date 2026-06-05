@@ -21,31 +21,67 @@ COORD_NAMES = ("Lateral", "Elevation", "Axial")
 @dataclass
 class SimSetup(DictMixin):
 
-    spacing: Annotated[float, OpenLIFUFieldData("Spacing", "Simulation grid spacing")] = 1.0
+    spacing: Annotated[float, OpenLIFUFieldData(
+        name="Voxel spacing",
+        description="Simulation grid spacing",
+        units_field="units", display_units="mm", precision=2,
+    )] = 1.0
     """Simulation grid spacing"""
 
-    units: Annotated[str, OpenLIFUFieldData("Spatial units", "Units used for spatial measurements")] = "mm"
+    units: Annotated[str, OpenLIFUFieldData(
+        name="Spatial units",
+        description="Units used for spatial measurements",
+        unit_options=("mm", "cm", "m"),
+    )] = "mm"
     """Units used for spatial measurements"""
 
-    x_extent: Annotated[Tuple[float, float], OpenLIFUFieldData("X-extent", "Simulation grid extent along the first dimension")] = (-30., 30.)
+    x_extent: Annotated[Tuple[float, float], OpenLIFUFieldData(
+        name="X-extent",
+        description="Simulation grid extent along the first dimension",
+        units_field="units", display_units="mm", precision=1,
+    )] = (-30., 30.)
     """Simulation grid extent along the first dimension"""
 
-    y_extent: Annotated[Tuple[float, float], OpenLIFUFieldData("Y-extent", "Simulation grid extend along the second dimension")] = (-30., 30.)
+    y_extent: Annotated[Tuple[float, float], OpenLIFUFieldData(
+        name="Y-extent",
+        description="Simulation grid extent along the second dimension",
+        units_field="units", display_units="mm", precision=1,
+    )] = (-30., 30.)
     """Simulation grid extend along the second dimension"""
 
-    z_extent: Annotated[Tuple[float, float], OpenLIFUFieldData("Z-extent", "Simulation grid extend along the third dimension")] = (-4., 60.)
+    z_extent: Annotated[Tuple[float, float], OpenLIFUFieldData(
+        name="Z-extent",
+        description="Simulation grid extent along the third dimension",
+        units_field="units", display_units="mm", precision=1,
+    )] = (-4., 60.)
     """Simulation grid extend along the third dimension"""
 
-    dt: Annotated[float, OpenLIFUFieldData("Time step", "Simulation time step")] = 0.
+    dt: Annotated[float, OpenLIFUFieldData(
+        name="Time step",
+        description="Simulation time step",
+        units="s", precision=6,
+    )] = 0.
     """Simulation time step"""
 
-    t_end: Annotated[float, OpenLIFUFieldData("End time", """Simulation end time""")] = 0.
+    t_end: Annotated[float, OpenLIFUFieldData(
+        name="End time",
+        description="Simulation end time",
+        units="s", precision=6,
+    )] = 0.
     """Simulation end time"""
 
-    c0: Annotated[float, OpenLIFUFieldData("Speed of Sound (m/s)", "Reference speed of sound for converting distance to time")] = 1500.0
+    c0: Annotated[float, OpenLIFUFieldData(
+        name="Default speed of sound",
+        description="Reference speed of sound for converting distance to time",
+        units="m/s", precision=0,
+    )] = 1500.0
     """Reference speed of sound for converting distance to time"""
 
-    cfl: Annotated[float, OpenLIFUFieldData("CFL number", "Courant-Friedrichs-Lewy number")] = 0.3
+    cfl: Annotated[float, OpenLIFUFieldData(
+        name="CFL number",
+        description="Courant-Friedrichs-Lewy number",
+        precision=2,
+    )] = 0.3
     """Courant-Friedrichs-Lewy number"""
 
     options: Annotated[dict[str, str], OpenLIFUFieldData("Simulation options", "Additional simulation options")] = field(default_factory=dict)
@@ -204,6 +240,27 @@ class SimSetup(DictMixin):
             {"Name": "CFL", "Value": self.cfl, "Unit": ""},
         ]
         return pd.DataFrame.from_records(records)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the simulation setup parameters.
+
+        Format: ``"{spacing}mm spacing, [{x0},{x1}]x[{y0},{y1}]x[{z0},{z1}]"``.
+        Spacing and extents are converted to millimeters regardless of the
+        configured storage units.
+        """
+        from openlifu.util.units import getunitconversion
+        try:
+            scale = getunitconversion(self.units, "mm")
+        except Exception:
+            scale = 1.0
+        spacing_mm = self.spacing * scale
+        x0, x1 = self.x_extent[0] * scale, self.x_extent[1] * scale
+        y0, y1 = self.y_extent[0] * scale, self.y_extent[1] * scale
+        z0, z1 = self.z_extent[0] * scale, self.z_extent[1] * scale
+        return (
+            f"{spacing_mm:g}mm spacing, "
+            f"[{x0:g},{x1:g}]x[{y0:g},{y1:g}]x[{z0:g},{z1:g}]"
+        )
 
     @staticmethod
     def from_dict(d: dict, on_keyword_mismatch: Literal['warn', 'raise', 'ignore'] = 'warn') -> SimSetup:

@@ -14,5 +14,5 @@ __all__ = [
     "SolutionAnalysis",
     "SolutionAnalysisOptions",
     "TargetConstraints",
-    "ParameterConstraint",
+    "ParameterConstraint"
 ]

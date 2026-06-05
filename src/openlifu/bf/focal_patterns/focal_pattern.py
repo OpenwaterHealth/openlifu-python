@@ -9,6 +9,7 @@ import pandas as pd
 from openlifu.bf import focal_patterns
 from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.field_display import summarize_fields
 from openlifu.util.units import getunittype
 
 
@@ -18,10 +19,18 @@ class FocalPattern(ABC):
     Abstract base class for representing a focal pattern
     """
 
-    target_pressure: Annotated[float, OpenLIFUFieldData("Target pressure", "Target pressure of the focal pattern in given units")] = 1.0
+    target_pressure: Annotated[float, OpenLIFUFieldData(
+        name="Target pressure",
+        description="Target pressure of the focal pattern",
+        units_field="units", display_units="kPa", precision=0,
+    )] = 1.0
     """Target pressure of the focal pattern in given units"""
 
-    units: Annotated[str, OpenLIFUFieldData("Pressure units", "Pressure units")] = "Pa"
+    units: Annotated[str, OpenLIFUFieldData(
+        name="Pressure units",
+        description="Pressure units (Pa, kPa, MPa)",
+        unit_options=("Pa", "kPa", "MPa"),
+    )] = "Pa"
     """Pressure units"""
 
     def __post_init__(self):
@@ -83,3 +92,11 @@ class FocalPattern(ABC):
         :returns: Pandas DataFrame of the focal pattern parameters
         """
         pass
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of this focal pattern's parameters.
+
+        Subclasses may override to include their own additional fields; by
+        default the base class summarizes ``target_pressure``.
+        """
+        return summarize_fields(self, ("target_pressure",))

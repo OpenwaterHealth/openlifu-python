@@ -10,16 +10,25 @@ import xarray as xa
 from openlifu.bf.apod_methods import ApodizationMethod
 from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.field_display import summarize_fields
 from openlifu.util.units import getunittype
 from openlifu.xdc import Transducer
 
 
 @dataclass
 class MaxAngle(ApodizationMethod):
-    max_angle: Annotated[float, OpenLIFUFieldData("Maximum acceptance angle", "Maximum acceptance angle for each element from the vector normal to the element surface")] = 30.0
+    max_angle: Annotated[float, OpenLIFUFieldData(
+        name="Maximum acceptance angle",
+        description="Maximum acceptance angle for each element from the vector normal to the element surface",
+        units_field="units", display_units="deg", precision=1,
+    )] = 30.0
     """Maximum acceptance angle for each element from the vector normal to the element surface"""
 
-    units: Annotated[str, OpenLIFUFieldData("Angle units", "Angle units")] = "deg"
+    units: Annotated[str, OpenLIFUFieldData(
+        name="Angle units",
+        description="Angle units",
+        unit_options=("deg", "rad"),
+    )] = "deg"
     """Angle units"""
 
     def __post_init__(self):
@@ -47,3 +56,7 @@ class MaxAngle(ApodizationMethod):
         records = [{"Name": "Type", "Value": "Max Angle", "Unit": ""},
                    {"Name": "Max Angle", "Value": self.max_angle, "Unit": self.units}]
         return pd.DataFrame.from_records(records)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the apodization parameters."""
+        return summarize_fields(self, ("max_angle",))

@@ -10,8 +10,8 @@ from openlifu.util.dict_conversion import DictMixin
 
 PARAM_STATUS_SYMBOLS = {
     "ok": "✅",
-    "warning": "❗",
-    "error": "❌"
+    "warning": "⚠️",
+    "error": "⛔",
 }
 
 @dataclass

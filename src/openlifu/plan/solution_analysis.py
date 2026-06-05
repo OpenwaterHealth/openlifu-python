@@ -50,7 +50,7 @@ PARAM_FORMATS = {
     "duty_cycle_pulse_train_pct": [None, "0.1f", "%", "Pulse Train Duty Cycle"],
     "duty_cycle_sequence_pct": [None, "0.1f", "%", "Sequence Duty Cycle"],
     "sequence_duration_s": [None, "0.0f", "s", "Sequence Duration"],
-    "estimated_tx_temperature_rise_C": [None, "0.2f", "°C", "Estimated TX Temperature Rise"]}
+    "estimated_tx_temperature_rise_C": [None, "0.2f", "°C", "Est. Transmitter Heating"]}
 
 @dataclass
 class SolutionAnalysis(DictMixin):
@@ -237,34 +237,74 @@ class SolutionAnalysis(DictMixin):
 
 @dataclass
 class SolutionAnalysisOptions(DictMixin):
-    standoff_sound_speed: Annotated[float, OpenLIFUFieldData("Standoff sound speed (m/s)", "Speed of sound in standoff, for calculating initial impedance")] = 1500.0
+    standoff_sound_speed: Annotated[float, OpenLIFUFieldData(
+        name="Standoff sound speed",
+        description="Speed of sound in standoff, for calculating initial impedance",
+        units="m/s", precision=0,
+    )] = 1500.0
     """Speed of sound in standoff, for calculating initial impedance"""
 
-    standoff_density: Annotated[float, OpenLIFUFieldData("Standoff density (kg/m³)", "Density of standoff medium (kg/m³)")] = 1000.0
+    standoff_density: Annotated[float, OpenLIFUFieldData(
+        name="Standoff density",
+        description="Density of standoff medium",
+        units="kg/m^3", precision=0,
+    )] = 1000.0
     """Density of standoff medium (kg/m³)"""
 
-    ref_sound_speed: Annotated[float, OpenLIFUFieldData("Reference sound speed (m/s)", "Reference speed of sound in the medium (m/s)")] = 1500.0
+    ref_sound_speed: Annotated[float, OpenLIFUFieldData(
+        name="Reference sound speed",
+        description="Reference speed of sound in the medium",
+        units="m/s", precision=0,
+    )] = 1500.0
     """Reference speed of sound in the medium (m/s)"""
 
-    ref_density: Annotated[float, OpenLIFUFieldData("Reference density (kg/m³)", "Reference density (kg/m³)")] = 1000.0
+    ref_density: Annotated[float, OpenLIFUFieldData(
+        name="Reference density",
+        description="Reference density",
+        units="kg/m^3", precision=0,
+    )] = 1000.0
     """Reference density (kg/m³)"""
 
-    mainlobe_aspect_ratio: Annotated[Tuple[float, float, float], OpenLIFUFieldData("Mainlobe aspect ratio (lat,ele,ax)", "Aspect ratio of the mainlobe mask")] = (1., 1., 5.)
+    mainlobe_aspect_ratio: Annotated[Tuple[float, float, float], OpenLIFUFieldData(
+        name="Mainlobe aspect ratio (lat,ele,ax)",
+        description="Aspect ratio of the mainlobe mask",
+        precision=1,
+    )] = (1., 1., 5.)
     """Aspect ratio of the mainlobe ellipsoid mask, in the form (lat,ele,ax). (1,1,5) means an ellipsoid 5x as long as it is wide."""
 
-    mainlobe_radius: Annotated[float, OpenLIFUFieldData("Mainlobe mask radius", "Size of the mainlobe mask, in the units provided for Distance units (`distance_units`)")] = 2.5e-3
+    mainlobe_radius: Annotated[float, OpenLIFUFieldData(
+        name="Mainlobe mask radius",
+        description="Size of the mainlobe mask, in the units provided for Distance units (`distance_units`)",
+        units_field="distance_units", display_units="mm", precision=2,
+    )] = 2.5e-3
     """Size of the mainlobe mask, in the units provided for Distance units (`distance_units`). The mainlobe mask is an ellipsoid with this radius, scaled by the `mainlobe_aspect_ratio`."""
 
-    beamwidth_radius: Annotated[float, OpenLIFUFieldData("Beamwidth search radius", "Size of the beamwidth search, in the units provided for Distance units (`distance_units`)")] = 5e-3
+    beamwidth_radius: Annotated[float, OpenLIFUFieldData(
+        name="Beamwidth search radius",
+        description="Size of the beamwidth search, in the units provided for Distance units (`distance_units`)",
+        units_field="distance_units", display_units="mm", precision=2,
+    )] = 5e-3
     """Size of the beamwidth search, in the units provided for Distance units (`distance_units`). The beamwidth is found along the lateral and elevation lines perpendicular to the focus axis."""
 
-    sidelobe_radius: Annotated[float, OpenLIFUFieldData("Sidelobe radius", "Size of the sidelobe mask, in the units provided for Distance units (`distance_units`)")] = 3e-3
+    sidelobe_radius: Annotated[float, OpenLIFUFieldData(
+        name="Sidelobe radius",
+        description="Size of the sidelobe mask, in the units provided for Distance units (`distance_units`)",
+        units_field="distance_units", display_units="mm", precision=2,
+    )] = 3e-3
     """Size of the sidelobe mask, in the units provided for Distance units (`distance_units`). Pressure outside of this ellipsoid (scaled by `mainlobe_aspect_ratio`) is considered outside of the focal region."""
 
-    sidelobe_zmin: Annotated[float, OpenLIFUFieldData("Sidelobe minimum z", "Minimum z coordinate of the sidelobe mask, in the units provided for Distance units (`distance_units`)")] = 1e-3
+    sidelobe_zmin: Annotated[float, OpenLIFUFieldData(
+        name="Sidelobe minimum z",
+        description="Minimum z coordinate of the sidelobe mask, in the units provided for Distance units (`distance_units`)",
+        units_field="distance_units", display_units="mm", precision=2,
+    )] = 1e-3
     """Minimum z coordinate of the sidelobe mask, in the units provided for Distance units (`distance_units`). This value is used to ignore emitted pressure artifacts."""
 
-    distance_units: Annotated[str, OpenLIFUFieldData("Distance units", "The units used for distance measurements")] = "m"
+    distance_units: Annotated[str, OpenLIFUFieldData(
+        name="Distance units",
+        description="The units used for distance measurements",
+        unit_options=("mm", "cm", "m"),
+    )] = "m"
     """The units used for distance measurements"""
 
     param_constraints: Annotated[Dict[str, ParameterConstraint], OpenLIFUFieldData("Parameter constraints", None)] = field(default_factory=dict)
@@ -312,6 +352,15 @@ class SolutionAnalysisOptions(DictMixin):
         }
 
         return cls(**parameter_dict)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the analysis options.
+
+        Returns an empty string: the solution-analysis options are too
+        numerous to render meaningfully on a collapsible header, so callers
+        should fall back to showing only the section title.
+        """
+        return ""
 
 def find_centroid(da: xa.DataArray, cutoff:float, units:None) -> np.ndarray:
     """Find the centroid of a thresholded region of a DataArray"""
