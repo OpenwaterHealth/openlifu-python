@@ -122,3 +122,19 @@ class SegmentationMethod(ABC):
         :returns: Pandas DataFrame of the segmentation method parameters
         """
         pass
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the segmentation method.
+
+        Default implementation returns the human-friendly form of the class name
+        (e.g. ``"Uniform Tissue"``); subclasses may override to provide more
+        detail.
+        """
+        # Insert spaces before capital letters: "UniformTissue" -> "Uniform Tissue"
+        name = type(self).__name__
+        result = []
+        for i, ch in enumerate(name):
+            if i > 0 and ch.isupper() and not name[i - 1].isupper():
+                result.append(" ")
+            result.append(ch)
+        return "".join(result)

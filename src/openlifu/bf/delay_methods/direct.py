@@ -10,12 +10,17 @@ import xarray as xa
 from openlifu.bf.delay_methods import DelayMethod
 from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.field_display import summarize_fields
 from openlifu.xdc import Transducer
 
 
 @dataclass
 class Direct(DelayMethod):
-    c0: Annotated[float, OpenLIFUFieldData("Speed of Sound (m/s)", "Speed of sound in the medium (m/s)")] = 1480.0
+    c0: Annotated[float, OpenLIFUFieldData(
+        name="Speed of sound",
+        description="Speed of sound in the medium",
+        units="m/s", precision=0,
+    )] = 1480.0
     """Speed of sound in the medium (m/s)"""
 
     def __post_init__(self):
@@ -46,3 +51,7 @@ class Direct(DelayMethod):
         records = [{"Name": "Type", "Value": "Direct", "Unit": ""},
                    {"Name": "Default Sound Speed", "Value": self.c0, "Unit": "m/s"}]
         return pd.DataFrame.from_records(records)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the delay method."""
+        return summarize_fields(self, ("c0",))
