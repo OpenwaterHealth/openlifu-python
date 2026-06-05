@@ -58,7 +58,7 @@ io = [
   "crc",
   "crcmod",
   "pyserial",
-  "openlifu-sdk>=1.0.6"
+  "openlifu-sdk>=2.0.11"
 ]
 sim = [
   "k-wave-python==0.4.0",
