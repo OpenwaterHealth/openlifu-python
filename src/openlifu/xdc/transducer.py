@@ -354,6 +354,19 @@ class Transducer:
         units = self.units if units is None else units
         return (apodizations.reshape(-1,1) * self.get_positions(units=units)).sum(axis=0)/apodizations.sum()
 
+    def get_effective_aperture_radius(self, apodizations:np.ndarray, units:str | None=None):
+        """Get the radius of a circular aperture with the same area as the effective active region of the transducer based on apodizations.
+
+        Args:
+            apodizations: vector of apodizations for the transducer elements
+            units: units in which to describe the radius. If not provided then transducer native units are used.
+
+        Returns: a scalar describing the effective aperture radius in the transducer coordinate system
+        """
+        units = self.units if units is None else units
+        effective_area = self.get_area(units=units) * (apodizations>0).astype(float).mean()
+        return np.sqrt(effective_area/np.pi)
+
     def get_positions(self, transform:np.ndarray | None=None, units:str | None=None):
         units = self.units if units is None else units
         matrix = transform if transform is not None else np.eye(4)
