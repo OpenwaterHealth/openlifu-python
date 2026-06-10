@@ -914,6 +914,31 @@ class Database:
         session_filename = self.get_session_filename(subject.id, session_id)
         if os.path.isfile(session_filename):
             session = Session.from_file(session_filename)
+            # Drop any transducer_tracking_results whose photoscan_id no
+            # longer exists in this session's photoscans index. The session
+            # JSON and the photoscans index can drift out of sync (e.g. a
+            # photoscan was deleted from the index without the session JSON
+            # being rewritten), and ``write_session`` rejects sessions whose
+            # tracking results reference unknown photoscans. Sanitizing on
+            # load means a freshly-loaded session can round-trip through
+            # ``write_session`` without surprise validation errors on exit.
+            if session.transducer_tracking_results:
+                indexed_photoscan_ids = set(self.get_photoscan_ids(subject.id, session_id))
+                kept: list = []
+                dropped: list[str] = []
+                for result in session.transducer_tracking_results:
+                    if result.photoscan_id in indexed_photoscan_ids:
+                        kept.append(result)
+                    else:
+                        dropped.append(result.photoscan_id)
+                if dropped:
+                    self.logger.warning(
+                        "Dropping %d transducer_tracking_result(s) from session "
+                        "%s of subject %s referencing photoscan id(s) not in "
+                        "this session's photoscans index: %s",
+                        len(dropped), session_id, subject.id, sorted(set(dropped)),
+                    )
+                    session.transducer_tracking_results = kept
             self.logger.info(f"Loaded session {session_id} for subject {subject.id}")
             return session
         else:
