@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from xarray import Dataset
+from xarray import DataArray, Dataset
 
 
 def getunittype(unit):
@@ -198,12 +198,12 @@ def rescale_data_arr(data_arr: Dataset, units: str) -> Dataset:
     return rescaled
 
 
-def rescale_coords(data_arr: Dataset, units: str) -> Dataset:
+def rescale_coords(data_arr: Dataset | DataArray, units: str) -> Dataset:
     """
-    Rescales the Dataset coordinates to the specified units.
+    Rescales the Dataset or DataArray coordinates to the specified units.
 
     Args:
-        data_arr : xarray.Dataset
+        data_arr : xarray.Dataset or xarray.DataArray
         units: str
 
     Returns:

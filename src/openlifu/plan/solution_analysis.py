@@ -17,6 +17,7 @@ from openlifu.util.units import getunitconversion, getunittype
 logger = logging.getLogger(__name__)
 
 DEFAULT_ORIGIN = np.zeros(3)
+DEFAULT_SIDELOBE_ZMIN_MM = 10.0
 
 PARAM_FORMATS = {
     "mainlobe_pnp_MPa": ["max", "0.3f", "MPa", "Mainlobe Peak Negative Pressure"],
@@ -269,35 +270,35 @@ class SolutionAnalysisOptions(DictMixin):
         name="Mainlobe aspect ratio (lat,ele,ax)",
         description="Aspect ratio of the mainlobe mask",
         precision=1,
-    )] = (1., 1., 5.)
-    """Aspect ratio of the mainlobe ellipsoid mask, in the form (lat,ele,ax). (1,1,5) means an ellipsoid 5x as long as it is wide."""
+    )] = (1., 1., 7.)
+    """Aspect ratio of the mainlobe ellipsoid mask, in the form (lat,ele,ax). (1,1,7) means an ellipsoid 7x as long as it is wide."""
 
-    mainlobe_radius: Annotated[float, OpenLIFUFieldData(
+    mainlobe_radius: Annotated[float | None, OpenLIFUFieldData(
         name="Mainlobe mask radius",
         description="Size of the mainlobe mask, in the units provided for Distance units (`distance_units`)",
         units_field="distance_units", display_units="mm", precision=2,
-    )] = 2.5e-3
-    """Size of the mainlobe mask, in the units provided for Distance units (`distance_units`). The mainlobe mask is an ellipsoid with this radius, scaled by the `mainlobe_aspect_ratio`."""
+    )] = None
+    """Size of the mainlobe mask, in the units provided for Distance units (`distance_units`). The mainlobe mask is an ellipsoid with this radius, scaled by the `mainlobe_aspect_ratio`. If not provided, will be calculated from estimated beamwidth"""
 
-    beamwidth_radius: Annotated[float, OpenLIFUFieldData(
+    beamwidth_radius: Annotated[float | None, OpenLIFUFieldData(
         name="Beamwidth search radius",
         description="Size of the beamwidth search, in the units provided for Distance units (`distance_units`)",
         units_field="distance_units", display_units="mm", precision=2,
-    )] = 5e-3
+    )] = None
     """Size of the beamwidth search, in the units provided for Distance units (`distance_units`). The beamwidth is found along the lateral and elevation lines perpendicular to the focus axis."""
 
-    sidelobe_radius: Annotated[float, OpenLIFUFieldData(
+    sidelobe_radius: Annotated[float | None, OpenLIFUFieldData(
         name="Sidelobe radius",
         description="Size of the sidelobe mask, in the units provided for Distance units (`distance_units`)",
         units_field="distance_units", display_units="mm", precision=2,
-    )] = 3e-3
-    """Size of the sidelobe mask, in the units provided for Distance units (`distance_units`). Pressure outside of this ellipsoid (scaled by `mainlobe_aspect_ratio`) is considered outside of the focal region."""
+    )] = None
+    """Size of the sidelobe mask, in the units provided for Distance units (`distance_units`). Pressure outside of this ellipsoid (scaled by `mainlobe_aspect_ratio`) is considered outside of the focal region. If not provided, will be estimated from the beamwidth * 1.5"""
 
-    sidelobe_zmin: Annotated[float, OpenLIFUFieldData(
+    sidelobe_zmin: Annotated[float | None, OpenLIFUFieldData(
         name="Sidelobe minimum z",
         description="Minimum z coordinate of the sidelobe mask, in the units provided for Distance units (`distance_units`)",
         units_field="distance_units", display_units="mm", precision=2,
-    )] = 1e-3
+    )] = None
     """Minimum z coordinate of the sidelobe mask, in the units provided for Distance units (`distance_units`). This value is used to ignore emitted pressure artifacts."""
 
     distance_units: Annotated[str, OpenLIFUFieldData(
@@ -311,6 +312,10 @@ class SolutionAnalysisOptions(DictMixin):
     """TODO: Add description"""
 
     def __post_init__(self):
+        if not isinstance(self.distance_units, str):
+            raise TypeError("Distance units must be a string")
+        if getunittype(self.distance_units) != 'distance':
+            raise ValueError(f"Distance units must be a length unit, got {self.distance_units}")
         if self.standoff_sound_speed <= 0:
             raise ValueError("Standoff sound speed must be greater than 0")
         if self.standoff_density <= 0:
@@ -324,18 +329,16 @@ class SolutionAnalysisOptions(DictMixin):
         self.mainlobe_aspect_ratio = tuple(self.mainlobe_aspect_ratio)  # Ensure it's a tuple
         if not all(isinstance(x, int | float) for x in self.mainlobe_aspect_ratio):
             raise TypeError("Mainlobe aspect ratio must contain only numbers")
-        if not isinstance(self.mainlobe_radius, int | float) or self.mainlobe_radius <= 0:
+        if self.mainlobe_radius is not None and (not isinstance(self.mainlobe_radius, int | float) or self.mainlobe_radius <= 0):
             raise ValueError("Mainlobe radius must be a positive number")
-        if not isinstance(self.beamwidth_radius, int | float) or self.beamwidth_radius <= 0:
+        if self.beamwidth_radius is not None and (not isinstance(self.beamwidth_radius, int | float) or self.beamwidth_radius <= 0):
             raise ValueError("Beamwidth radius must be a positive number")
-        if not isinstance(self.sidelobe_radius, int | float) or self.sidelobe_radius <= 0:
+        if self.sidelobe_radius is not None and (not isinstance(self.sidelobe_radius, int | float) or self.sidelobe_radius <= 0):
             raise ValueError("Sidelobe radius must be a positive number")
+        if self.sidelobe_zmin is None:
+            self.sidelobe_zmin = getunitconversion("mm", self.distance_units) * DEFAULT_SIDELOBE_ZMIN_MM
         if not isinstance(self.sidelobe_zmin, int | float) or self.sidelobe_zmin < 0:
             raise ValueError("Sidelobe minimum z must be a non-negative number")
-        if not isinstance(self.distance_units, str):
-            raise TypeError("Distance units must be a string")
-        if getunittype(self.distance_units) != 'distance':
-            raise ValueError(f"Distance units must be a length unit, got {self.distance_units}")
 
     @classmethod
     def from_dict(cls: Type[SolutionAnalysisOptions], parameter_dict: Dict[str, Any]) -> SolutionAnalysisOptions:
@@ -400,11 +403,11 @@ def get_focus_matrix(focus, origin=[0,0,0]) -> np.ndarray:
     M[3,3] = 1
     return M
 
-def get_gridded_transformed_coords(da: xa.DataArray, matrix: np.ndarray, as_dataset=True):
-    """Transform the coords of a DataArray using a transform matrix.
+def get_gridded_transformed_coords(da: xa.DataArray | xa.Dataset, matrix: np.ndarray, as_dataset=True):
+    """Transform the coords of a DataArray or Dataset using a transform matrix.
 
     Args:
-        da: DataArray whose coordinates will be used
+        da: DataArray or Dataset whose coordinates will be used
         matrix: a 4x4 coordinate transformation matrix, transforming from the desired coordinate system
             to the coordinate system of `da`
         as_dataset: Whether to return the transformed coords as a numpy array or an xarray Dataset
@@ -421,13 +424,13 @@ def get_gridded_transformed_coords(da: xa.DataArray, matrix: np.ndarray, as_data
         coords = xa.Dataset({f'd_{dim}': (da.dims, coords[...,i]) for i, dim in enumerate(da.dims)}, coords=da.coords)
     return coords
 
-def get_offset_grid(da: xa.DataArray, focus, origin=DEFAULT_ORIGIN, as_dataset=True):
+def get_offset_grid(da: xa.DataArray | xa.Dataset, focus, origin=DEFAULT_ORIGIN, as_dataset=True):
     """Transform the coords of a DataArray that is in transducer coordinates to focus coordinates
 
     See `get_focus_matrix` for the meaning of "focus coordinates"
 
     Args:
-        da: DataArray whose coordinates will be used (presumably the transducer coordinates)
+        da: DataArray or Dataset whose coordinates will be used (presumably the transducer coordinates)
         focus: A 3D point describing the focus location in the coordinates of `da`
         origin: A 3D point describing the "effective origin" in the coordinates of `da`
             (see `Transducer.get_effective_origin` for the meaning of this).
@@ -440,12 +443,12 @@ def get_offset_grid(da: xa.DataArray, focus, origin=DEFAULT_ORIGIN, as_dataset=T
     coords = get_gridded_transformed_coords(da, M, as_dataset=as_dataset)
     return coords
 
-def calc_dist_from_focus(da: xa.DataArray, focus, origin=DEFAULT_ORIGIN, aspect_ratio=[1,1,1], as_dataarray=True):
+def calc_dist_from_focus(da: xa.DataArray | xa.Dataset, focus, origin=DEFAULT_ORIGIN, aspect_ratio=[1,1,1], as_dataarray=True):
     """Compute a distance map from a focus point in transducer space, using a possibly distorted metric that respects
     the symmetry of the focus shape (e.g. it could be cigar-shaped).
 
     Args:
-        da: DataArray that will supply the coordnate grid (presumably transducer coordinates)
+        da: DataArray or Dataset that will supply the coordnate grid (presumably transducer coordinates)
         focus: A 3D point describing the focus location in the coordinates of `da`
         origin: A 3D point describing the "effective origin" in the coordinates of `da`
             (see `Transducer.get_effective_origin` for the meaning of this).
@@ -462,7 +465,7 @@ def calc_dist_from_focus(da: xa.DataArray, focus, origin=DEFAULT_ORIGIN, aspect_
     return dist
 
 def get_mask(
-    da: xa.DataArray,
+    da: xa.DataArray | xa.Dataset,
     focus,
     distance:float,
     origin=DEFAULT_ORIGIN,
@@ -474,7 +477,7 @@ def get_mask(
     The focus region is an ellipsoid centered at the focus point.
 
     Args:
-        da: DataArray that will supply the coordnate grid (presumably transducer coordinates)
+        da: DataArray or Dataset that will supply the coordnate grid (presumably transducer coordinates)
         focus: A 3D point describing the focus location in the coordinates of `da`
         distance: How far from the `focus` to include points in the mask. See `calc_dist_from_focus`
             for the distorted metric under which a ball of points becomes an ellispoid in euclidean space.
@@ -553,6 +556,7 @@ def get_beam_bounds(
     origin=DEFAULT_ORIGIN,
     min_offset:float | None=None,
     max_offset:float | None=None,
+    clip_to_bounds:bool=True,
 ) -> Tuple[float, float]:
     """Determine how far along a focal coordinate system axis a DataArray's value stays above a certain cutoff.
 
@@ -584,11 +588,15 @@ def get_beam_bounds(
     da_negoff = da_negoff.where(da_negoff < float(cutoff), drop=True)
     if da_negoff.size > 0:
         negoff = float(da_negoff.coords[f'offset_d{dim}'][-1])
+    elif clip_to_bounds:
+        negoff = float(interp_da.coords[f'offset_d{dim}'][0])
     else:
         negoff = np.nan
     da_posoff = da_posoff.where(da_posoff < float(cutoff), drop=True)
     if da_posoff.size > 0:
         posoff = float(da_posoff.coords[f'offset_d{dim}'][0])
+    elif clip_to_bounds:
+        posoff = float(interp_da.coords[f'offset_d{dim}'][-1])
     else:
         posoff = np.nan
     return negoff, posoff
