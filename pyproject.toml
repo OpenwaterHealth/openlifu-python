@@ -85,6 +85,7 @@ dev = [
   "dvc[gdrive]",
 ]
 docs = [
+  "openlifu[mesh, db, cloud]",
   "sphinx>=7.0",
   "myst_parser>=0.13",
   "sphinx_copybutton",
