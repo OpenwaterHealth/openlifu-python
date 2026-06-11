@@ -20,40 +20,57 @@ Installation
 Requirements
 ~~~~~~~~~~~~
 
-Python 3.10-3.12 on Windows or Linux.
+Python 3.10-3.12.
 
-Create Virtual Environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+We recommend installing ``openlifu`` in a virtual environment.
 
-Windows:
+Recommended install
+~~~~~~~~~~~~~~~~~~~
 
-.. code:: sh
-
-   C:\Users\<uname>\AppData\Local\Programs\Python\Python311\python.exe -m venv env
-   .\env\Scripts\activate
-
-Linux:
+For most users, install the application dependency set:
 
 .. code:: sh
 
-   python3.11 -m venv env
+   python -m pip install "openlifu[app]"
 
-Install project (editable)
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+This installs the core package plus dependencies for database and volume I/O,
+simulation, mesh and photogrammetry workflows, cloud sync, and hardware
+communication support via ``openlifu-sdk``.
 
-With this repo as the working directory:
+Minimal install
+~~~~~~~~~~~~~~~
 
-Basic mode
-^^^^^^^^^^
+If you only need the lightweight core package:
+
 .. code:: sh
 
-   pip install -e .
+   python -m pip install openlifu
 
-Dev mode
-^^^^^^^^
+The minimal install does not include optional dependencies for simulation,
+DICOM/NIfTI volume loading, mesh/VTK workflows, photogrammetry, cloud sync, or
+hardware communication.
+
+Install selected features
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can also install only the optional dependency groups you need:
+
 .. code:: sh
 
-   pip install -e '.[dev]'
+   python -m pip install "openlifu[sim,db]"
+   python -m pip install "openlifu[io]"
+   python -m pip install "openlifu[jupyter]"
+
+Useful extras include:
+
+* ``app``: recommended application set
+* ``sim``: k-Wave simulation support
+* ``db``: DICOM/NIfTI and database volume support
+* ``mesh``: mesh and VTK support
+* ``photogrammetry``: photo-based mesh reconstruction dependencies
+* ``io``: hardware communication dependencies, including ``openlifu-sdk``
+* ``cloud``: cloud sync dependencies
+* ``jupyter``: notebook support
 
 Installing Meshroom
 -------------------

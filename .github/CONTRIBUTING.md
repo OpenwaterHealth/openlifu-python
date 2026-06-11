@@ -39,8 +39,12 @@ You can set up a development environment by running:
 ```bash
 python3 -m venv .venv
 source ./.venv/bin/activate
-pip install -v -e '.[dev]'
+python -m pip install -v -e '.[test]'
 ```
+
+The `test` extra installs the optional feature dependencies exercised by the
+test suite, plus pytest tooling. If you also need development-only DVC tooling,
+install `.[test,dev]`.
 
 If you have the
 [Python Launcher for Unix](https://github.com/brettcannon/python-launcher), you
@@ -48,7 +52,7 @@ can instead do:
 
 ```bash
 py -m venv .venv
-py -m install -v -e '.[dev]'
+py -m pip install -v -e '.[test]'
 ```
 
 # Post setup
