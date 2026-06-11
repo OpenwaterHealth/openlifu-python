@@ -9,7 +9,7 @@ authors = [
   { name = "Peter Hollender", email = "peterhollender@gmail.com" },
 ]
 description = "Openwater Focused Ultrasound Toolkit"
-readme = "README.rst"
+readme = "README.md"
 license.file = "LICENSE"
 requires-python = ">=3.10"
 classifiers = [
