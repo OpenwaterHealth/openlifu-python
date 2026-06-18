@@ -71,6 +71,15 @@ class Session:
     transducer_id: Annotated[str | None, OpenLIFUFieldData("Transducer ID", "ID of the transducer associated with this session")] = None
     """ID of the transducer associated with this session"""
 
+    solution_id: Annotated[str, OpenLIFUFieldData("Solution ID", "ID of the most recently computed sonication Solution for this session, or '' if there is none. Cleared whenever the array_transform changes because a Solution is only valid for the transducer pose it was computed against.")] = ""
+    """ID of the most recently computed sonication ``Solution`` for this session, or ``""`` if there is none.
+
+    Cleared whenever the ``array_transform`` changes (manual move, virtual fit, transducer tracking), because a
+    ``Solution`` is only valid for the specific transducer pose it was computed against. Consumers loading a
+    session can use this to fetch the persisted ``Solution`` (and its analysis) from the database rather than
+    re-running the simulation.
+    """
+
     array_transform: Annotated[ArrayTransform, OpenLIFUFieldData("Array transform", "The transducer affine transform matrix with units, situating the transducer in space")] = field(default_factory=lambda: ArrayTransform(np.eye(4), "mm"))
     """The transducer affine transform matrix with units, situating the transducer in space"""
 
