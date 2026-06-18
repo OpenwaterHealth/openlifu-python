@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from openlifu.nav.photoscan import Photoscan, load_data_from_photoscan
-from openlifu.plan import Protocol, Run, Solution
+from openlifu.plan import Protocol, Run, Solution, SolutionAnalysis
 from openlifu.util.json import PYFUSEncoder
 from openlifu.util.types import PathLike
 from openlifu.util.volume_conversion import (
@@ -569,6 +569,57 @@ class Database:
 
         self.logger.info(f"Wrote solution with ID {solution.id} to the database.")
 
+    def write_solution_analysis(
+        self,
+        session: Session,
+        solution_id: str,
+        analysis: SolutionAnalysis,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.OVERWRITE,
+    ) -> None:
+        """Write a SolutionAnalysis next to its parent Solution.
+
+        The analysis file lives at ``<solution_dir>/<solution_id>_analysis.json``. Defaults to overwriting
+        because the analysis is a derived artifact: re-running ``Solution.analyze`` should always be safe to
+        re-persist over a stale copy.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        analysis_filepath = self.get_solution_analysis_filepath(session.subject_id, session.id, solution_id)
+        if analysis_filepath.exists():
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"SolutionAnalysis for solution {solution_id} already exists in the database."
+                )
+            if on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping SolutionAnalysis for solution {solution_id} as it already exists."
+                )
+                return
+            if on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting SolutionAnalysis for solution {solution_id} in the database."
+                )
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+        analysis_filepath.parent.mkdir(parents=True, exist_ok=True)
+        analysis_filepath.write_text(analysis.to_json(compact=False))
+        self.logger.info(
+            f"Wrote SolutionAnalysis for solution {solution_id} to the database."
+        )
+
+    def load_solution_analysis(self, session: Session, solution_id: str) -> SolutionAnalysis:
+        """Load the SolutionAnalysis associated with the given Solution within the given Session."""
+        analysis_filepath = self.get_solution_analysis_filepath(session.subject_id, session.id, solution_id)
+        if not analysis_filepath.exists() or not analysis_filepath.is_file():
+            self.logger.error(
+                f"SolutionAnalysis file not found for solution {solution_id}, session {session.id}"
+            )
+            raise FileNotFoundError(
+                f"SolutionAnalysis file not found for solution {solution_id}, session {session.id}"
+            )
+        analysis = SolutionAnalysis.from_json(analysis_filepath.read_text())
+        self.logger.info(f"Loaded SolutionAnalysis for solution {solution_id}")
+        return analysis
+
     def choose_session(self, subject, options=None):
         # Implement the logic to choose a session
         raise NotImplementedError("Method not yet implemented")
@@ -1047,6 +1098,14 @@ class Database:
         """Get the solution json file for the solution with the given ID"""
         session_dir = self.get_session_dir(subject_id, session_id)
         return Path(session_dir) / 'solutions' / solution_id / f"{solution_id}.json"
+
+    def get_solution_analysis_filepath(self, subject_id, session_id, solution_id) -> Path:
+        """Get the solution-analysis json file for the solution with the given ID.
+
+        Lives next to the solution itself so the analysis and the solution that produced it stay together.
+        """
+        session_dir = self.get_session_dir(subject_id, session_id)
+        return Path(session_dir) / 'solutions' / solution_id / f"{solution_id}_analysis.json"
 
     def get_solutions_filename(self, subject_id, session_id) -> Path:
         """Get the path to the overall solutions json file for the requested session"""
