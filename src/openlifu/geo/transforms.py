@@ -100,6 +100,86 @@ def spherical_to_cartesian_vectorized(p: np.ndarray) -> np.ndarray:
     )
 
 
+def lps_to_spherical(l: float, p: float, s: float) -> Tuple[float, float, float]:
+    """Convert LPS (left, posterior, superior) coordinates to LPS spherical coordinates.
+
+    This is a port of the MATLAB function ``fus.seg.lps2sph``. Note that it uses a different spherical
+    convention than `cartesian_to_spherical`: the angles here are in degrees, ``th`` is an azimuthal angle
+    offset so that the anterior (nose) direction is 0 degrees, and ``phi`` is an elevation angle rather than
+    the polar angle off the z-axis.
+
+    Args: l, p, s are the left, posterior, and superior coordinates.
+    Returns: th, phi, r, where
+        th is the azimuthal angle in degrees, increasing toward patient-left from the anterior line, in the range (-90, 270].
+        phi is the elevation angle in degrees, measured above the left-posterior plane, in the range [-90, 90].
+        r is the radial distance, a nonnegative float in the same units as the inputs.
+    """
+    return (
+        np.rad2deg(np.arctan2(p, l)) + 90.0,
+        np.rad2deg(np.arctan2(s, np.hypot(l, p))),
+        np.sqrt(l**2 + p**2 + s**2),
+    )
+
+
+def spherical_to_lps(th: float, phi: float, r: float) -> Tuple[float, float, float]:
+    """Convert LPS spherical coordinates to LPS (left, posterior, superior) coordinates.
+
+    This is a port of the MATLAB function ``fus.seg.sph2lps`` and is the inverse of `lps_to_spherical`.
+
+    Args:
+        th: the azimuthal angle in degrees, increasing toward patient-left from the anterior line
+        phi: the elevation angle in degrees, measured above the left-posterior plane
+        r: the radial distance
+    Returns the LPS coordinates l, p, s in the same units as r.
+    """
+    az = np.deg2rad(th - 90.0)
+    el = np.deg2rad(phi)
+    return (
+        r * np.cos(el) * np.cos(az),
+        r * np.cos(el) * np.sin(az),
+        r * np.sin(el),
+    )
+
+
+def lps_to_spherical_vectorized(p: np.ndarray) -> np.ndarray:
+    """Convert LPS coordinates to LPS spherical coordinates.
+
+    Args:
+        p: an array of shape (...,3), where the last axis describes point LPS coordinates l, p, s.
+    Returns: An array of shape (...,3), where the last axis describes point LPS spherical coordinates
+        th, phi, r. See `lps_to_spherical` for the definitions and units of these coordinates.
+    """
+    return np.stack(
+        [
+            np.rad2deg(np.arctan2(p[..., 1], p[..., 0])) + 90.0,
+            np.rad2deg(np.arctan2(p[..., 2], np.sqrt((p[..., 0:2] ** 2).sum(axis=-1)))),
+            np.sqrt((p**2).sum(axis=-1)),
+        ],
+        axis=-1,
+    )
+
+
+def spherical_to_lps_vectorized(p: np.ndarray) -> np.ndarray:
+    """Convert LPS spherical coordinates to LPS coordinates.
+
+    Args:
+        p: an array of shape (...,3), where the last axis describes point LPS spherical coordinates
+            th, phi, r. See `lps_to_spherical` for the definitions and units of these coordinates.
+    Returns: An array of shape (...,3), where the last axis describes point LPS coordinates l, p, s.
+    """
+    az = np.deg2rad(p[..., 0] - 90.0)
+    el = np.deg2rad(p[..., 1])
+    r = p[..., 2]
+    return np.stack(
+        [
+            r * np.cos(el) * np.cos(az),
+            r * np.cos(el) * np.sin(az),
+            r * np.sin(el),
+        ],
+        axis=-1,
+    )
+
+
 def spherical_coordinate_basis(th: float, phi: float) -> np.ndarray:
     """Return normalized spherical coordinate basis at a location with spherical polar and azimuthal coordinates (th, phi).
     The coordinate basis is returned as an array `basis` of shape (3,3), where the rows are the basis vectors,
