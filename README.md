@@ -116,7 +116,7 @@ source ~/.bashrc
 2.  In the **Environment Variables** window, under **User variables**, select
     **Path** and click **Edit**.
 3.  Click **New**, and add the path to the folder containing `Meshroom.exe`.
-4.  Click **OK** to save the changes.
+4.  Click **OK** on every tab to save the changes.
 
 #### Enable GPU Acceleration
 
