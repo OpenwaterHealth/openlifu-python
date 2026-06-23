@@ -422,10 +422,14 @@ def run_reconstruction(
     cache_dir = temp_dir / "MeshroomCache"
     pair_file_path = cache_dir / "imageMatches.txt"
 
+    # Copy pipeline to temp directory without spaces
+    pipeline_copied = temp_dir / f"{pipeline_name}.mg"
+    shutil.copy(pipeline, pipeline_copied)
+
     project_file = temp_dir / "project.mg"
     command = [
         "meshroom_batch",
-        "--pipeline", pipeline.as_posix(),
+        "--pipeline", pipeline_copied.as_posix(),
         "--output", output_dir.as_posix(),
         "--input", images_dir.as_posix(),
         "--save", project_file.as_posix(),
