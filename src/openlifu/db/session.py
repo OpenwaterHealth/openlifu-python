@@ -119,6 +119,18 @@ class Session:
     markers: Annotated[List[Point], OpenLIFUFieldData("Markers", "Registration markers saved to this session")] = field(default_factory=list)
     """Registration markers saved to this session"""
 
+    photoscans: Annotated[List[str], OpenLIFUFieldData("Photoscan IDs", "IDs of photoscans that belong to this session. Each ID corresponds to a Photoscan stored under the session's ``photoscans/`` directory in the database.")] = field(default_factory=list)
+    """IDs of photoscans that belong to this session. Each ID corresponds to a Photoscan
+    stored under the session's ``photoscans/`` directory in the database. This is the
+    authoritative list used to decide which photoscans to keep on save; legacy sessions
+    that omit this field are auto-populated from the on-disk index on load."""
+
+    photocollections: Annotated[List[str], OpenLIFUFieldData("Photocollection reference numbers", "Reference numbers of photocollections that belong to this session. Each entry corresponds to a directory under the session's ``photocollections/`` directory in the database.")] = field(default_factory=list)
+    """Reference numbers (scan IDs) of photocollections that belong to this session.
+    Each entry corresponds to a directory under the session's ``photocollections/``
+    directory in the database. Legacy sessions that omit this field are auto-populated
+    from the on-disk index on load."""
+
     attrs: Annotated[dict, OpenLIFUFieldData("Custom attributes", "Dictionary of additional custom attributes to save to the session")] = field(default_factory=dict)
     """Dictionary of additional custom attributes to save to the session"""
 
