@@ -61,8 +61,7 @@ def test_new_database(tmp_path:Path):
 @pytest.fixture()
 def example_transducer_tracking_result() -> TransducerTrackingResult:
     return TransducerTrackingResult(photoscan_id="example_photoscan",
-                                    transducer_to_volume_transform = ArrayTransform(np.eye(4),"mm"),
-                                    photoscan_to_volume_transform = ArrayTransform(np.eye(4),"mm"))
+                                    transducer_to_volume_transform = ArrayTransform(np.eye(4),"mm"))
 
 def test_write_protocol(example_database: Database):
     protocol = Protocol(name="bleh", id="a_protocol_called_bleh")
@@ -496,7 +495,8 @@ def test_session_arrays_read_correctly(example_session:Session):
 
     for tt_result in example_session.transducer_tracking_results:
         assert isinstance(tt_result.transducer_to_volume_transform.matrix, np.ndarray)
-        assert isinstance(tt_result.photoscan_to_volume_transform.matrix, np.ndarray)
+    for pr in example_session.photoscan_registrations:
+        assert isinstance(pr.transform.matrix, np.ndarray)
 
 @pytest.mark.parametrize("compact_representation", [True, False])
 def test_serialize_deserialize_session(example_session : Session, compact_representation:bool):

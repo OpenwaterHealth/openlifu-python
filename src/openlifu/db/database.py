@@ -963,7 +963,23 @@ class Database:
             options = {}
         session_filename = self.get_session_filename(subject.id, session_id)
         if os.path.isfile(session_filename):
+            # Read raw JSON first so we can detect legacy sessions that lack
+            # the photoscans / photocollections index fields and migrate them
+            # from the on-disk index files. Present-but-empty lists are
+            # respected (user may have intentionally cleared them).
+            with open(session_filename) as _legacy_fh:
+                _raw_session_dict = json.load(_legacy_fh)
             session = Session.from_file(session_filename)
+            if 'photoscans' not in _raw_session_dict:
+                try:
+                    session.photoscans = list(self.get_photoscan_ids(subject.id, session_id) or [])
+                except Exception:
+                    session.photoscans = []
+            if 'photocollections' not in _raw_session_dict:
+                try:
+                    session.photocollections = list(self.get_photocollection_reference_numbers(subject.id, session_id) or [])
+                except Exception:
+                    session.photocollections = []
             # Drop any transducer_tracking_results whose photoscan_id no
             # longer exists in this session's photoscans index. The session
             # JSON and the photoscans index can drift out of sync (e.g. a

@@ -17,10 +17,37 @@ from openlifu.util.strings import sanitize
 
 
 @dataclass
+class PhotoscanRegistration:
+    """A registration of a photoscan model into the volume coordinate frame.
+
+    A photoscan may have multiple registration attempts stored on the session; at most one is
+    expected to be approved at a time, though this is not enforced at the dataclass level.
+    Downstream transducer-tracking results refer back to a specific registration by ``id``.
+    """
+
+    photoscan_id: Annotated[str, OpenLIFUFieldData("Photoscan ID", "ID of the photoscan that this registration applies to")]
+    """ID of the photoscan that this registration applies to"""
+
+    transform: Annotated[ArrayTransform, OpenLIFUFieldData("Photoscan-to-volume transform", "Transform that registers the photoscan model to the volume's skin segmentation")]
+    """Transform that registers the photoscan model to the volume's skin segmentation"""
+
+    approval: Annotated[bool, OpenLIFUFieldData("Registration approved?", "Whether this photoscan registration has been approved by the user.")] = False
+    """Whether this photoscan registration has been approved by the user."""
+
+    id: Annotated[str | None, OpenLIFUFieldData("Registration ID", "Stable identifier for this photoscan registration, unique within the session. Survives reordering or deletion of other registrations so that downstream references (e.g. transducer tracking results) remain valid.")] = None
+    """Stable identifier for this photoscan registration, unique within the session."""
+
+
+@dataclass
 class TransducerTrackingResult:
     """
     Class representing the results of running the transducer tracking
     algorithm.
+
+    Each result registers a transducer pose against a volume in the context of a particular
+    photoscan registration. The photoscan-to-volume transform that the tracking was performed
+    against is stored separately as a :class:`PhotoscanRegistration` and referenced here by
+    ``photoscan_registration_id``.
     """
 
     photoscan_id: Annotated[str, OpenLIFUFieldData("Photoscan ID", "ID of the photoscan object used for transducer tracking")]
@@ -29,16 +56,19 @@ class TransducerTrackingResult:
     transducer_to_volume_transform: Annotated[ArrayTransform, OpenLIFUFieldData("Transducer to volume transform", "Transform output by transducer tracking algorithm to register the transducer surface to the volume")]
     """Transform output by transducer tracking algorithm to register the transducer surface to the volume"""
 
-    photoscan_to_volume_transform: Annotated[ArrayTransform, OpenLIFUFieldData("Photoscan to volume transform", "Transform output by the transducer tracking algorithm to register the photoscan model the volume's skin segmentation")]
-    """Transform output by the transducer tracking algorithm to register the photoscan model the volume's skin segmentation"""
+    photoscan_registration_id: Annotated[str | None, OpenLIFUFieldData("Photoscan registration ID", "ID of the PhotoscanRegistration this tracking result was computed against. May be None for legacy entries imported from sessions saved before the registration concept was split out.")] = None
+    """ID of the :class:`PhotoscanRegistration` this tracking result was computed against."""
 
-    transducer_to_volume_tracking_approved: Annotated[bool, OpenLIFUFieldData("Transducer tracking approved?", "Approval state of transducer to volume tracking result. `True` means the user has provided some kind of confirmation that the transform result agrees with reality.")] = False
-    """Approval state of transducer to volume tracking result. `True` means the user has provided some kind of
-    confirmation that the transform result agrees with reality."""
+    approval: Annotated[bool, OpenLIFUFieldData("Tracking approved?", "Approval state of the transducer tracking result. `True` means the user has provided some kind of confirmation that the transform result agrees with reality.")] = False
+    """Approval state of the transducer tracking result. ``True`` means the user has provided
+    some kind of confirmation that the transform result agrees with reality."""
 
-    photoscan_to_volume_tracking_approved: Annotated[bool, OpenLIFUFieldData("Photoscan tracking approved?", "Approval state of photoscan to volume tracking result. `True` means the user has provided some kind of confirmation that the transform result agrees with reality.")] = False
-    """Approval state of photoscan to volume tracking result. `True` means the user has provided some kind of
-    confirmation that the transform result agrees with reality."""
+    id: Annotated[str | None, OpenLIFUFieldData("Result ID", "Stable identifier for this tracking result, unique within the session. Survives reordering or deletion of other results so that downstream references (e.g. solutions) remain valid.")] = None
+    """Stable identifier for this tracking result, unique within the session. Survives reordering or
+    deletion of other results so that downstream references (e.g. solutions) remain valid."""
+
+    target_id: Annotated[str | None, OpenLIFUFieldData("Target ID", "ID of the openlifu Point target this tracking result was computed for, if any.")] = None
+    """ID of the openlifu Point target this tracking result was computed for, if any."""
 
 @dataclass
 class Session:
@@ -89,6 +119,18 @@ class Session:
     markers: Annotated[List[Point], OpenLIFUFieldData("Markers", "Registration markers saved to this session")] = field(default_factory=list)
     """Registration markers saved to this session"""
 
+    photoscans: Annotated[List[str], OpenLIFUFieldData("Photoscan IDs", "IDs of photoscans that belong to this session. Each ID corresponds to a Photoscan stored under the session's ``photoscans/`` directory in the database.")] = field(default_factory=list)
+    """IDs of photoscans that belong to this session. Each ID corresponds to a Photoscan
+    stored under the session's ``photoscans/`` directory in the database. This is the
+    authoritative list used to decide which photoscans to keep on save; legacy sessions
+    that omit this field are auto-populated from the on-disk index on load."""
+
+    photocollections: Annotated[List[str], OpenLIFUFieldData("Photocollection reference numbers", "Reference numbers of photocollections that belong to this session. Each entry corresponds to a directory under the session's ``photocollections/`` directory in the database.")] = field(default_factory=list)
+    """Reference numbers (scan IDs) of photocollections that belong to this session.
+    Each entry corresponds to a directory under the session's ``photocollections/``
+    directory in the database. Legacy sessions that omit this field are auto-populated
+    from the on-disk index on load."""
+
     attrs: Annotated[dict, OpenLIFUFieldData("Custom attributes", "Dictionary of additional custom attributes to save to the session")] = field(default_factory=dict)
     """Dictionary of additional custom attributes to save to the session"""
 
@@ -106,6 +148,10 @@ class Session:
 
     transducer_tracking_results: Annotated[List[TransducerTrackingResult], OpenLIFUFieldData("Tracking results", "List of any transducer tracking results")] = field(default_factory=list)
     """List of any transducer tracking results"""
+
+    photoscan_registrations: Annotated[List[PhotoscanRegistration], OpenLIFUFieldData("Photoscan registrations", "List of photoscan-to-volume registrations stored on this session.")] = field(default_factory=list)
+    """List of photoscan-to-volume registrations stored on this session. Each transducer tracking
+    result references one of these registrations by ``photoscan_registration_id``."""
 
     def __post_init__(self):
         if self.id is None and self.name is None:
@@ -150,17 +196,62 @@ class Session:
             raise ValueError("Sessions no longer recognize a volume attribute -- it is now volume_id.")
         if 'array_transform' in d:
             d['array_transform'] = ArrayTransform.from_dict(d['array_transform'])
+
+        # PhotoscanRegistrations are split out of TT results as of the multi-registration refactor.
+        # Old session JSONs lack this key; if absent we start with an empty list and may populate it
+        # below when migrating legacy TT entries that still carry an embedded photoscan_to_volume_transform.
+        if 'photoscan_registrations' in d:
+            d['photoscan_registrations'] = [
+                PhotoscanRegistration(
+                    photoscan_id=p['photoscan_id'],
+                    transform=ArrayTransform.from_dict(p['transform']),
+                    approval=p.get('approval', False),
+                    id=p.get('id'),
+                )
+                for p in d['photoscan_registrations']
+            ]
+        else:
+            d['photoscan_registrations'] = []
+
         if 'transducer_tracking_results' in d:
-            d['transducer_tracking_results'] = [
-                TransducerTrackingResult(
-                    t['photoscan_id'],
-                    ArrayTransform.from_dict(t['transducer_to_volume_transform']),
-                    ArrayTransform.from_dict(t['photoscan_to_volume_transform']),
-                    t['transducer_to_volume_tracking_approved'],
-                    t['photoscan_to_volume_tracking_approved']
-                    )
-                    for t in d['transducer_tracking_results']
-                    ]
+            # Per-photoscan counter for any registrations we synthesize during legacy migration;
+            # continues past the count of registrations already present so we don't collide.
+            pr_count_by_photoscan: Dict[str, int] = {}
+            for pr in d['photoscan_registrations']:
+                pr_count_by_photoscan[pr.photoscan_id] = pr_count_by_photoscan.get(pr.photoscan_id, 0) + 1
+
+            migrated_tt: List[TransducerTrackingResult] = []
+            for t in d['transducer_tracking_results']:
+                if 'photoscan_to_volume_transform' in t:
+                    # Legacy entry: split the embedded PV transform out into its own registration.
+                    pid = t['photoscan_id']
+                    n = pr_count_by_photoscan.get(pid, 0)
+                    pr_count_by_photoscan[pid] = n + 1
+                    synthesized_pr_id = f"{pid}__pr__{n:02d}"
+                    d['photoscan_registrations'].append(PhotoscanRegistration(
+                        photoscan_id=pid,
+                        transform=ArrayTransform.from_dict(t['photoscan_to_volume_transform']),
+                        approval=t.get('photoscan_to_volume_tracking_approved', False),
+                        id=synthesized_pr_id,
+                    ))
+                    migrated_tt.append(TransducerTrackingResult(
+                        photoscan_id=pid,
+                        transducer_to_volume_transform=ArrayTransform.from_dict(t['transducer_to_volume_transform']),
+                        photoscan_registration_id=synthesized_pr_id,
+                        approval=t.get('transducer_to_volume_tracking_approved', t.get('approval', False)),
+                        id=t.get('id'),
+                        target_id=t.get('target_id'),
+                    ))
+                else:
+                    migrated_tt.append(TransducerTrackingResult(
+                        photoscan_id=t['photoscan_id'],
+                        transducer_to_volume_transform=ArrayTransform.from_dict(t['transducer_to_volume_transform']),
+                        photoscan_registration_id=t.get('photoscan_registration_id'),
+                        approval=t.get('approval', t.get('transducer_to_volume_tracking_approved', False)),
+                        id=t.get('id'),
+                        target_id=t.get('target_id'),
+                    ))
+            d['transducer_tracking_results'] = migrated_tt
         if isinstance(d['targets'], list):
             if len(d['targets'])>0 and isinstance(d['targets'][0], dict):
                 d['targets'] = [Point.from_dict(p) for p in d['targets']]
@@ -201,6 +292,7 @@ class Session:
             ]
 
         d['transducer_tracking_results'] = [asdict(t) for t in d['transducer_tracking_results']]
+        d['photoscan_registrations'] = [asdict(r) for r in d['photoscan_registrations']]
 
         return d
 
