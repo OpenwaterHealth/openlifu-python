@@ -11,9 +11,9 @@ location without surgery.
 The study enrolled 20 adults, ages 18 to 50, who were experiencing a major
 depressive episode and clinically significant repetitive negative thinking, such
 as persistent rumination or worry. Their depression was moderate to severe at
-enrollment. Half reported taking medication for anxiety or depression during the
-study, and participants were asked not to change their existing medication or
-psychotherapy regimens.
+enrollment. Half reported currently taking a psychiatric or other prescribed
+medication (most commonly an antidepressant), and participants were asked not to
+change their existing medication or psychotherapy regimens.
 
 A custom headset held a 128-element ultrasound array against the forehead. Each
 session delivered 10 minutes of low-intensity ultrasound to the left anterior
@@ -68,7 +68,11 @@ say lack of symptom improvement. It states that neither withdrawal was due to an
 adverse event. No serious adverse events were reported. Some participants
 described temporary discomfort, including tension or pain that they associated
 with headset tightness. Follow-up MRI readings showed no new microhemorrhages.
-These safety observations cover only this small group and short study period.
+No participant reported suicidal thoughts posing an imminent risk to themselves.
+One participant reported a temporary increase in suicidal thinking at the
+assessment after week 3, which the researchers attributed to a personal event (a
+relationship breakup) unrelated to the study procedure. These safety
+observations cover only this small group and short study period.
 
 ## What do these results mean—and what do they not mean?
 
