@@ -29,29 +29,29 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "xarray[io]",
+  "xarray[io]>=2026.2.0",
   "numpy<2",
-  "pandas",
-  "scipy",
-  "requests",
+  "pandas>=3.0.2",
+  "scipy>=1.14.1",
+  "requests>=2.33.1",
 ]
 
 [project.optional-dependencies]
 jupyter = [
-  "ipykernel",
-  "matplotlib",
+  "ipykernel>=7.2.0",
+  "matplotlib>=3.10.0",
 ]
 mesh = [
-  "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
-  "trimesh",
-  "scikit-image",
-  "vtk",
-  "Pillow",
-  "OpenEXR"
+  "embreex>=2.17.7.post7; platform_machine=='x86_64' or platform_machine=='AMD64'",
+  "trimesh>=4.11.5",
+  "scikit-image>=0.26.0",
+  "vtk>=9.6.1",
+  "Pillow>=12.2.0",
+  "OpenEXR>=3.4.9"
 ]
 db = [
-  "nibabel",
-  "pydicom"
+  "nibabel>=5.4.2",
+  "pydicom>=3.0.2"
 ]
 io = [
   "crc>=7.1.0",
@@ -60,41 +60,41 @@ io = [
 ]
 sim = [
   "k-wave-python==0.4.0",
-  "nvidia-ml-py"
+  "nvidia-ml-py>=13.595.45"
 ]
 cloud = [
-  "watchdog",
-  "python-socketio[client]"
+  "watchdog>=6.0.0",
+  "python-socketio[client]>=5.16.1"
 ]
 photogrammetry = [
-  "embreex; platform_machine=='x86_64' or platform_machine=='AMD64'",
-  "opencv-contrib-python",
+  "embreex>=2.17.7.post7; platform_machine=='x86_64' or platform_machine=='AMD64'",
+  "opencv-contrib-python>=4.11.0.86",
   "onnxruntime==1.18.0",
-  "trimesh",
-  "scikit-image",
-  "vtk",
-  "Pillow",
-  "OpenEXR"
+  "trimesh>=4.11.5",
+  "scikit-image>=0.26.0",
+  "vtk>=9.6.1",
+  "Pillow>=12.2.0",
+  "OpenEXR>=3.4.9"
 ]
 dev = [
   "pytest >=6",
   "pytest-cov >=3",
-  "pytest-mock",
-  "dvc[gdrive]",
+  "pytest-mock>=3.15.1",
+  "dvc[gdrive]>=3.67.1",
 ]
 docs = [
   "openlifu[mesh, db, cloud]",
   "sphinx>=7.0",
   "myst_parser>=0.13",
-  "sphinx_copybutton",
-  "sphinx_autodoc_typehints",
+  "sphinx_copybutton>=0.5.2",
+  "sphinx_autodoc_typehints>=3.9.11",
   "furo>=2023.08.17",
 ]
 test = [
   "openlifu[mesh, db, io, sim, cloud, photogrammetry]",
   "pytest >=6",
   "pytest-cov >=3",
-  "pytest-mock",
+  "pytest-mock>=3.15.1",
 ]
 all = [
   "openlifu[jupyter, mesh, db, io, sim, cloud, photogrammetry, test, dev, docs]",
