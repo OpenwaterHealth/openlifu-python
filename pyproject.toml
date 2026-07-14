@@ -30,7 +30,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "xarray[io]>=2026.2.0",
-  "numpy<2",
+  "numpy>=2.0.0",
   "pandas>=3.0.2",
   "scipy>=1.14.1",
   "requests>=2.33.1",
@@ -69,7 +69,7 @@ cloud = [
 photogrammetry = [
   "embreex>=2.17.7.post7; platform_machine=='x86_64' or platform_machine=='AMD64'",
   "opencv-contrib-python>=4.11.0.86",
-  "onnxruntime==1.18.0",
+  "onnxruntime>=1.20.0",
   "trimesh>=4.11.5",
   "scikit-image>=0.26.0",
   "vtk>=9.6.1",
