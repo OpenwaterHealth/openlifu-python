@@ -143,6 +143,29 @@ def test_num_foci(example_solution:Solution):
     assert example_solution.delays.shape[0] == num_foci
     assert example_solution.apodizations.shape[0] == num_foci
 
+
+def test_get_ita():
+    """Verify that ITA applies the overall sequence duty cycle exactly once."""
+    solution = Solution(
+        pulse=Pulse(duration=0.08),
+        sequence=Sequence(
+            pulse_interval=0.1,
+            pulse_count=10,
+            pulse_train_interval=2.0,
+        ),
+        foci=[Point()],
+    )
+    intensity = xa.DataArray(
+        np.array([[[[5.0]]]]),
+        dims=("focal_point_index", "x", "y", "z"),
+        attrs={"units": "W/cm^2"},
+    )
+
+    assert solution.get_pulsetrain_dutycycle() == pytest.approx(0.8) # 0.08 / 0.1 = 0.8
+    assert solution.get_sequence_dutycycle() == pytest.approx(0.4) # 0.8 * ( 10*0.1 / 2.0 ) = 0.4
+    assert solution.get_ita(intensity).item() == pytest.approx(2000.0) # 5.0 * 0.4 = 2 W/cm^2 = 2000 mW/cm^2
+
+
 @pytest.mark.parametrize("compact_representation", [True, False])
 def test_json_serialize_deserialize_solution_analysis(compact_representation: bool):
     """Verify that turning a SolutionAnalysis into json and then re-constructing it gets back to the original"""
