@@ -489,15 +489,14 @@ class Solution:
             intensity_scaled = rescale_data_arr(intensity, units)
         else:
             intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
-        pulsetrain_dutycycle = self.get_pulsetrain_dutycycle()
-        treatment_dutycycle = self.get_sequence_dutycycle()
+        sequence_dutycycle = self.get_sequence_dutycycle()
         pulse_seq = (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
         counts = np.zeros((1, 1, 1, self.num_foci()))
         for i in range(self.num_foci()):
             counts[0, 0, 0, i] = np.sum(pulse_seq == (i+1))
         intensity = intensity_scaled.copy(deep=True)
         isppa_avg = np.sum(np.expand_dims(intensity.data, axis=-1) * counts, axis=-1) / np.sum(counts)
-        intensity.data = isppa_avg * pulsetrain_dutycycle * treatment_dutycycle
+        intensity.data = isppa_avg * sequence_dutycycle
 
         return intensity
 
