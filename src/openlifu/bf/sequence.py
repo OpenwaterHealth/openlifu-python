@@ -15,16 +15,30 @@ class Sequence(DictMixin):
     Class for representing a sequence of pulses
     """
 
-    pulse_interval: Annotated[float, OpenLIFUFieldData("Pulse interval (s)", "Interval between pulses in the sequence (s)")] = 1.0  # s
+    pulse_interval: Annotated[float, OpenLIFUFieldData(
+        name="Pulse interval",
+        description="Interval between pulses in the sequence",
+        units="s", display_units="ms", precision=1,
+    )] = 1.0  # s
     """Interval between pulses in the sequence (s)"""
 
-    pulse_count: Annotated[int, OpenLIFUFieldData("Pulse count", "Number of pulses in the sequence")] = 1
+    pulse_count: Annotated[int, OpenLIFUFieldData(
+        name="Pulse count",
+        description="Number of pulses in the sequence",
+    )] = 1
     """Number of pulses in the sequence"""
 
-    pulse_train_interval: Annotated[float, OpenLIFUFieldData("Pulse train interval (s)", "Interval between pulse trains in the sequence (s)")] = 1.0  # s
+    pulse_train_interval: Annotated[float, OpenLIFUFieldData(
+        name="Pulse train interval",
+        description="Interval between pulse trains in the sequence",
+        units="s", display_units="s", precision=2,
+    )] = 1.0  # s
     """Interval between pulse trains in the sequence (s)"""
 
-    pulse_train_count: Annotated[int, OpenLIFUFieldData("Pulse train count", "Number of pulse trains in the sequence")] = 1
+    pulse_train_count: Annotated[int, OpenLIFUFieldData(
+        name="Pulse train count",
+        description="Number of pulse trains in the sequence",
+    )] = 1
     """Number of pulse trains in the sequence"""
 
     def __post_init__(self):
@@ -72,3 +86,17 @@ class Sequence(DictMixin):
         else:
             interval = self.pulse_train_interval
         return interval * self.pulse_train_count
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the sequence parameters.
+
+        Format: ``"{pulse_count} pulses every {pulse_interval}ms,
+        repeated {pulse_train_count}x every {pulse_train_interval}s"``.
+        Numeric values use ``%g`` formatting (no trailing zeros).
+        """
+        pulse_interval_ms = self.pulse_interval * 1000.0
+        pulse_train_interval_s = self.pulse_train_interval
+        return (
+            f"{int(self.pulse_count)} pulses every {pulse_interval_ms:g}ms, "
+            f"repeated {int(self.pulse_train_count)}x every {pulse_train_interval_s:g}s"
+        )

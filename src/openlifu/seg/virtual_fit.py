@@ -52,45 +52,92 @@ class VirtualFitOptions(DictMixin):
         yaw: 90 degrees minus the polar spherical coordinate.
     """
 
-    units: Annotated[str, OpenLIFUFieldData("Length units", "The units of length used in the length attributes of this class")] = "mm"
+    units: Annotated[str, OpenLIFUFieldData(
+        name="Length units",
+        description="The units of length used in the length attributes of this class",
+        unit_options=("mm", "cm", "m"),
+    )] = "mm"
     """The units of length used in the length attributes of this class"""
 
-    transducer_steering_center_distance: Annotated[float, OpenLIFUFieldData("Steering center distance", "Distance from the transducer origin axially to the center of the steering zone in the units `units`")] = 50.
+    transducer_steering_center_distance: Annotated[float, OpenLIFUFieldData(
+        name="Steering center distance",
+        description="Distance from the transducer origin axially to the center of the steering zone",
+        units_field="units", display_units="mm", precision=2,
+    )] = 50.
     """Distance from the transducer origin axially to the center of the steering zone in the units `units`"""
 
     steering_limits: Annotated[Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]],
-                               OpenLIFUFieldData("Steering limits", "Steering bounds along each axis from the transducer origin, in the units `units`")] = ((-50, 50), (-50, 50), (-50, 50))
+                               OpenLIFUFieldData(
+                                   name="Steering limits",
+                                   description="Steering bounds along each axis from the transducer origin",
+                                   units_field="units", display_units="mm", precision=1,
+                               )] = ((-50, 50), (-50, 50), (-50, 50))
     """Distance from the transducer origin axially to the center of the steering zone in the units `units`"""
 
-    pitch_range: Annotated[Tuple[float, float], OpenLIFUFieldData("Pitch range (deg)", "Range of pitches to include in the transducer fitting search grid, in degrees")] = (-10, 150)
+    pitch_range: Annotated[Tuple[float, float], OpenLIFUFieldData(
+        name="Pitch range",
+        description="Range of pitches to include in the transducer fitting search grid",
+        units="deg", precision=0,
+    )] = (-10, 150)
     """Range of pitches to include in the transducer fitting search grid, in degrees"""
 
-    pitch_step: Annotated[float, OpenLIFUFieldData("Pitch step size (deg)", "Pitch step size when forming the transducer fitting search grid, in degrees")] = 5
+    pitch_step: Annotated[float, OpenLIFUFieldData(
+        name="Pitch step size",
+        description="Pitch step size when forming the transducer fitting search grid",
+        units="deg", precision=1,
+    )] = 5
     """Pitch step size when forming the transducer fitting search grid, in degrees"""
 
-    yaw_range: Annotated[Tuple[float, float], OpenLIFUFieldData("Yaw range (deg)", "Range of yaws to include in the transducer fitting search grid, in degrees")] = (-65, 65)
+    yaw_range: Annotated[Tuple[float, float], OpenLIFUFieldData(
+        name="Yaw range",
+        description="Range of yaws to include in the transducer fitting search grid",
+        units="deg", precision=0,
+    )] = (-65, 65)
     """Range of yaws to include in the transducer fitting search grid, in degrees"""
 
-    yaw_step: Annotated[float, OpenLIFUFieldData("Yaw step size (deg)", "Yaw step size when forming the transducer fitting search grid, in degrees")] = 5
+    yaw_step: Annotated[float, OpenLIFUFieldData(
+        name="Yaw step size",
+        description="Yaw step size when forming the transducer fitting search grid",
+        units="deg", precision=1,
+    )] = 5
     """Yaw step size when forming the transducer fitting search grid, in degrees"""
 
-    planefit_dyaw_extent: Annotated[float, OpenLIFUFieldData("Plane fit yaw extent", "Left and right extents of the point grid to be used for plane fitting along the local yaw axes, in units of `units`")] = 15
+    planefit_dyaw_extent: Annotated[float, OpenLIFUFieldData(
+        name="Plane fit yaw extent",
+        description="Left and right extents of the point grid to be used for plane fitting along the local yaw axes",
+        units_field="units", display_units="mm", precision=2,
+    )] = 15
     """Left and right extents of the point grid to be used for plane fitting along the local yaw axes,
     in units of `units`. The plane fitting point grid will be twice this size, since this is left
     and right extents. (Note that this has units of length, not angle!)"""
 
-    planefit_dyaw_step: Annotated[float, OpenLIFUFieldData("Plane fit yaw step", "Local yaw axis step size to use when constructing plane fitting grids. In spatial units of `units`")] = 3
+    planefit_dyaw_step: Annotated[float, OpenLIFUFieldData(
+        name="Plane fit yaw step",
+        description="Local yaw axis step size to use when constructing plane fitting grids",
+        units_field="units", display_units="mm", precision=2,
+    )] = 3
     """Local yaw axis step size to use when constructing plane fitting grids. In spatial units of `units`."""
 
-    planefit_dpitch_extent: Annotated[float, OpenLIFUFieldData("Plane fit pitch extent", "Left and right extents of the point grid to be used for plane fitting along the local pitch axes, in spatial units of `units`")] = 15
+    planefit_dpitch_extent: Annotated[float, OpenLIFUFieldData(
+        name="Plane fit pitch extent",
+        description="Left and right extents of the point grid to be used for plane fitting along the local pitch axes",
+        units_field="units", display_units="mm", precision=2,
+    )] = 15
     """Left and right extents of the point grid to be used for plane fitting along the local pitch axes,
     in spatial units of `units`. The plane fitting point grid will be twice this size, since this is left
     and right extents."""
 
-    planefit_dpitch_step: Annotated[float, OpenLIFUFieldData("Plane fit pitch step", "Local pitch axis step size to use when constructing plane fitting grids. In spatial units of `units`")] = 3
+    planefit_dpitch_step: Annotated[float, OpenLIFUFieldData(
+        name="Plane fit pitch step",
+        description="Local pitch axis step size to use when constructing plane fitting grids",
+        units_field="units", display_units="mm", precision=2,
+    )] = 3
     """Local pitch axis step size to use when constructing plane fitting grids. In spatial units of `units`."""
 
-    top_n_candidates: Annotated[int, OpenLIFUFieldData("No. of candidates returned", "Sets the limit for the number of transducer transform candidates returned by the algorithm.")] = 4
+    top_n_candidates: Annotated[int, OpenLIFUFieldData(
+        name="No. of candidates returned",
+        description="Sets the limit for the number of transducer transform candidates returned by the algorithm.",
+    )] = 4
     """Sets the limit for the number of transducer transform candidates returned by the algorithm."""
 
     def __post_init__(self):
@@ -168,6 +215,15 @@ class VirtualFitOptions(DictMixin):
         parameter_dict["yaw_range"] = tuple(parameter_dict["yaw_range"])
         parameter_dict["steering_limits"] = tuple(map(tuple,parameter_dict["steering_limits"]))
         return VirtualFitOptions(**parameter_dict)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the virtual-fit options.
+
+        Returns an empty string: the virtual-fit options are too numerous to
+        render meaningfully on a collapsible header, so callers should fall
+        back to showing only the section title.
+        """
+        return ""
 
 def compute_skin_mesh_from_volume(
     volume_array : np.ndarray,

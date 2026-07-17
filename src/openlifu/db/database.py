@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from openlifu.nav.photoscan import Photoscan, load_data_from_photoscan
-from openlifu.plan import Protocol, Run, Solution
+from openlifu.plan import Protocol, Run, Solution, SolutionAnalysis
 from openlifu.util.json import PYFUSEncoder
 from openlifu.util.types import PathLike
 from openlifu.util.volume_conversion import (
@@ -568,6 +568,57 @@ class Database:
 
         self.logger.info(f"Wrote solution with ID {solution.id} to the database.")
 
+    def write_solution_analysis(
+        self,
+        session: Session,
+        solution_id: str,
+        analysis: SolutionAnalysis,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.OVERWRITE,
+    ) -> None:
+        """Write a SolutionAnalysis next to its parent Solution.
+
+        The analysis file lives at ``<solution_dir>/<solution_id>_analysis.json``. Defaults to overwriting
+        because the analysis is a derived artifact: re-running ``Solution.analyze`` should always be safe to
+        re-persist over a stale copy.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        analysis_filepath = self.get_solution_analysis_filepath(session.subject_id, session.id, solution_id)
+        if analysis_filepath.exists():
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"SolutionAnalysis for solution {solution_id} already exists in the database."
+                )
+            if on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping SolutionAnalysis for solution {solution_id} as it already exists."
+                )
+                return
+            if on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting SolutionAnalysis for solution {solution_id} in the database."
+                )
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+        analysis_filepath.parent.mkdir(parents=True, exist_ok=True)
+        analysis_filepath.write_text(analysis.to_json(compact=False))
+        self.logger.info(
+            f"Wrote SolutionAnalysis for solution {solution_id} to the database."
+        )
+
+    def load_solution_analysis(self, session: Session, solution_id: str) -> SolutionAnalysis:
+        """Load the SolutionAnalysis associated with the given Solution within the given Session."""
+        analysis_filepath = self.get_solution_analysis_filepath(session.subject_id, session.id, solution_id)
+        if not analysis_filepath.exists() or not analysis_filepath.is_file():
+            self.logger.error(
+                f"SolutionAnalysis file not found for solution {solution_id}, session {session.id}"
+            )
+            raise FileNotFoundError(
+                f"SolutionAnalysis file not found for solution {solution_id}, session {session.id}"
+            )
+        analysis = SolutionAnalysis.from_json(analysis_filepath.read_text())
+        self.logger.info(f"Loaded SolutionAnalysis for solution {solution_id}")
+        return analysis
+
     def choose_session(self, subject, options=None):
         # Implement the logic to choose a session
         raise NotImplementedError("Method not yet implemented")
@@ -912,7 +963,48 @@ class Database:
             options = {}
         session_filename = self.get_session_filename(subject.id, session_id)
         if os.path.isfile(session_filename):
+            # Read raw JSON first so we can detect legacy sessions that lack
+            # the photoscans / photocollections index fields and migrate them
+            # from the on-disk index files. Present-but-empty lists are
+            # respected (user may have intentionally cleared them).
+            with open(session_filename) as _legacy_fh:
+                _raw_session_dict = json.load(_legacy_fh)
             session = Session.from_file(session_filename)
+            if 'photoscans' not in _raw_session_dict:
+                try:
+                    session.photoscans = list(self.get_photoscan_ids(subject.id, session_id) or [])
+                except Exception:  # pylint: disable=broad-exception-caught
+                    session.photoscans = []
+            if 'photocollections' not in _raw_session_dict:
+                try:
+                    session.photocollections = list(self.get_photocollection_reference_numbers(subject.id, session_id) or [])
+                except Exception:  # pylint: disable=broad-exception-caught
+                    session.photocollections = []
+            # Drop any transducer_tracking_results whose photoscan_id no
+            # longer exists in this session's photoscans index. The session
+            # JSON and the photoscans index can drift out of sync (e.g. a
+            # photoscan was deleted from the index without the session JSON
+            # being rewritten), and ``write_session`` rejects sessions whose
+            # tracking results reference unknown photoscans. Sanitizing on
+            # load means a freshly-loaded session can round-trip through
+            # ``write_session`` without surprise validation errors on exit.
+            if session.transducer_tracking_results:
+                indexed_photoscan_ids = set(self.get_photoscan_ids(subject.id, session_id))
+                kept: list = []
+                dropped: list[str] = []
+                for result in session.transducer_tracking_results:
+                    if result.photoscan_id in indexed_photoscan_ids:
+                        kept.append(result)
+                    else:
+                        dropped.append(result.photoscan_id)
+                if dropped:
+                    self.logger.warning(
+                        "Dropping %d transducer_tracking_result(s) from session "
+                        "%s of subject %s referencing photoscan id(s) not in "
+                        "this session's photoscans index: %s",
+                        len(dropped), session_id, subject.id, sorted(set(dropped)),
+                    )
+                    session.transducer_tracking_results = kept
             self.logger.info(f"Loaded session {session_id} for subject {subject.id}")
             return session
         else:
@@ -1021,6 +1113,14 @@ class Database:
         """Get the solution json file for the solution with the given ID"""
         session_dir = self.get_session_dir(subject_id, session_id)
         return Path(session_dir) / 'solutions' / solution_id / f"{solution_id}.json"
+
+    def get_solution_analysis_filepath(self, subject_id, session_id, solution_id) -> Path:
+        """Get the solution-analysis json file for the solution with the given ID.
+
+        Lives next to the solution itself so the analysis and the solution that produced it stay together.
+        """
+        session_dir = self.get_session_dir(subject_id, session_id)
+        return Path(session_dir) / 'solutions' / solution_id / f"{solution_id}_analysis.json"
 
     def get_solutions_filename(self, subject_id, session_id) -> Path:
         """Get the path to the overall solutions json file for the requested session"""

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import sys
 
-import base58
-
 from openlifu_sdk.io.LIFUInterface import LIFUInterface
 
 # set PYTHONPATH=%cd%\src;%PYTHONPATH%
@@ -46,8 +44,7 @@ else:
 print("Get HW ID")
 hw_id = interface.hvcontroller.get_hardware_id()
 print(f"HW ID: {hw_id}")
-encoded_id = base58.b58encode(bytes.fromhex(hw_id)).decode()
-print(f"OW-LIFU-CON-{encoded_id}")
+print(f"OW-LIFU-CON-{hw_id}")
 
 print("Get Temperature1")
 temp1 = interface.hvcontroller.get_temperature1()

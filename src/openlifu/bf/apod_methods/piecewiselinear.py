@@ -10,19 +10,32 @@ import xarray as xa
 from openlifu.bf.apod_methods import ApodizationMethod
 from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.field_display import summarize_fields
 from openlifu.util.units import getunittype
 from openlifu.xdc import Transducer
 
 
 @dataclass
 class PiecewiseLinear(ApodizationMethod):
-    zero_angle: Annotated[float, OpenLIFUFieldData("Zero Apodization Angle", "Angle at and beyond which the piecewise linear apodization is 0%")] = 90.0
+    zero_angle: Annotated[float, OpenLIFUFieldData(
+        name="Zero apodization angle",
+        description="Angle at and beyond which the piecewise linear apodization is 0%",
+        units_field="units", display_units="deg", precision=1,
+    )] = 90.0
     """Angle at and beyond which the piecewise linear apodization is 0%"""
 
-    rolloff_angle: Annotated[float, OpenLIFUFieldData("Rolloff start angle", "Angle below which the piecewise linear apodization is 100%")] = 45.0
+    rolloff_angle: Annotated[float, OpenLIFUFieldData(
+        name="Rolloff start angle",
+        description="Angle below which the piecewise linear apodization is 100%",
+        units_field="units", display_units="deg", precision=1,
+    )] = 45.0
     """Angle below which the piecewise linear apodization is 100%"""
 
-    units: Annotated[str, OpenLIFUFieldData("Angle units", "Angle units")] = "deg"
+    units: Annotated[str, OpenLIFUFieldData(
+        name="Angle units",
+        description="Angle units",
+        unit_options=("deg", "rad"),
+    )] = "deg"
     """Angle units"""
 
     def __post_init__(self):
@@ -60,3 +73,7 @@ class PiecewiseLinear(ApodizationMethod):
             {"Name": "Rolloff Angle", "Value": self.rolloff_angle, "Unit": self.units},
         ]
         return pd.DataFrame.from_records(records)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary of the apodization parameters."""
+        return summarize_fields(self, ("zero_angle", "rolloff_angle"))

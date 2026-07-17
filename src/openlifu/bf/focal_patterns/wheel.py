@@ -9,6 +9,7 @@ import pandas as pd
 from openlifu.bf.focal_patterns import FocalPattern
 from openlifu.geo.point import Point
 from openlifu.util.annotations import OpenLIFUFieldData
+from openlifu.util.field_display import summarize_fields
 
 
 @dataclass
@@ -17,16 +18,30 @@ class Wheel(FocalPattern):
     Class for representing a wheel pattern
     """
 
-    center: Annotated[bool, OpenLIFUFieldData("Include center point?", "Whether to include the center for the wheel pattern")] = True
+    center: Annotated[bool, OpenLIFUFieldData(
+        name="Include center point?",
+        description="Whether to include the center for the wheel pattern",
+    )] = True
     """Whether to include the center for the wheel pattern"""
 
-    num_spokes: Annotated[int, OpenLIFUFieldData("Number of spokes", "Number of spokes in the wheel pattern")] = 4
+    num_spokes: Annotated[int, OpenLIFUFieldData(
+        name="Number of spokes",
+        description="Number of spokes in the wheel pattern",
+    )] = 4
     """Number of spokes in the wheel pattern"""
 
-    spoke_radius: Annotated[float, OpenLIFUFieldData("Spoke radius", "Radius of the spokes in the wheel pattern")] = 1.0  # mm
+    spoke_radius: Annotated[float, OpenLIFUFieldData(
+        name="Spoke radius",
+        description="Radius of the spokes in the wheel pattern",
+        units_field="distance_units", display_units="mm", precision=1,
+    )] = 1.0  # mm
     """Radius of the spokes in the wheel pattern"""
 
-    distance_units: Annotated[str, OpenLIFUFieldData("Units", "Units of the wheel pattern parameters")] = "mm"
+    distance_units: Annotated[str, OpenLIFUFieldData(
+        name="Distance units",
+        description="Units of the wheel pattern parameters",
+        unit_options=("mm", "cm", "m"),
+    )] = "mm"
     """Units of the wheel pattern parameters"""
 
     def __post_init__(self):
@@ -86,3 +101,10 @@ class Wheel(FocalPattern):
             {"Name": "Spoke Radius", "Value": self.spoke_radius, "Unit": self.distance_units},
         ]
         return pd.DataFrame.from_records(records)
+
+    def get_summary(self) -> str:
+        """Return a one-liner summary including base + wheel-specific fields."""
+        return summarize_fields(
+            self,
+            ("target_pressure", "num_spokes", "spoke_radius"),
+        )

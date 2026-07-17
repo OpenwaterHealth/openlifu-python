@@ -20,6 +20,7 @@ from openlifu.geo.point import Point
 from openlifu.geo.transforms import ArrayTransform
 from openlifu.nav.photoscan import Photoscan
 from openlifu.plan import Protocol, Run, Solution
+from openlifu.plan.solution_analysis import SolutionAnalysis
 from openlifu.util.volume_conversion import is_dicom_file_or_directory
 from openlifu.xdc import Transducer
 
@@ -60,8 +61,7 @@ def test_new_database(tmp_path:Path):
 @pytest.fixture()
 def example_transducer_tracking_result() -> TransducerTrackingResult:
     return TransducerTrackingResult(photoscan_id="example_photoscan",
-                                    transducer_to_volume_transform = ArrayTransform(np.eye(4),"mm"),
-                                    photoscan_to_volume_transform = ArrayTransform(np.eye(4),"mm"))
+                                    transducer_to_volume_transform = ArrayTransform(np.eye(4),"mm"))
 
 def test_write_protocol(example_database: Database):
     protocol = Protocol(name="bleh", id="a_protocol_called_bleh")
@@ -495,7 +495,8 @@ def test_session_arrays_read_correctly(example_session:Session):
 
     for tt_result in example_session.transducer_tracking_results:
         assert isinstance(tt_result.transducer_to_volume_transform.matrix, np.ndarray)
-        assert isinstance(tt_result.photoscan_to_volume_transform.matrix, np.ndarray)
+    for pr in example_session.photoscan_registrations:
+        assert isinstance(pr.transform.matrix, np.ndarray)
 
 @pytest.mark.parametrize("compact_representation", [True, False])
 def test_serialize_deserialize_session(example_session : Session, compact_representation:bool):
@@ -630,6 +631,54 @@ def test_write_solution_new_session(example_database:Database, example_subject:S
     solution = Solution(name="bleh", id='new_solution')
     example_database.write_session(example_subject, session)
     example_database.write_solution(session, solution)
+
+def test_session_solution_id_round_trips(example_database:Database, example_subject:Subject):
+    """A Session's solution_id field defaults to '' and round-trips through the database."""
+    session = Session(name="bleh", id='solution_link_session', subject_id=example_subject.id)
+    assert session.solution_id == ""
+
+    example_database.write_session(example_subject, session)
+    assert example_database.load_session(example_subject, session.id).solution_id == ""
+
+    session.solution_id = "some_solution"
+    example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
+    assert example_database.load_session(example_subject, session.id).solution_id == "some_solution"
+
+def test_write_load_solution_analysis(example_database:Database, example_subject:Subject):
+    """SolutionAnalysis can be written next to its parent solution and reloaded faithfully."""
+    session = Session(name="bleh", id='analysis_session', subject_id=example_subject.id)
+    solution = Solution(name="bleh", id='analysis_solution')
+    example_database.write_session(example_subject, session)
+    example_database.write_solution(session, solution)
+
+    analysis = SolutionAnalysis(mainlobe_isppa_Wcm2=[1.0, 2.0], beamwidth_ax_6dB_mm=[3.0, 4.0], MI=5.0)
+    example_database.write_solution_analysis(session, solution.id, analysis)
+
+    analysis_filepath = example_database.get_solution_analysis_filepath(session.subject_id, session.id, solution.id)
+    assert analysis_filepath.is_file()
+    assert analysis_filepath.name == f"{solution.id}_analysis.json"
+
+    reloaded = example_database.load_solution_analysis(session, solution.id)
+    assert dataclasses_are_equal(reloaded, analysis)
+
+    # ERROR on conflict
+    with pytest.raises(ValueError, match="already exists"):
+        example_database.write_solution_analysis(session, solution.id, analysis, on_conflict=OnConflictOpts.ERROR)
+
+    # SKIP keeps original
+    skipped = SolutionAnalysis(mainlobe_isppa_Wcm2=[9.0], MI=99.0)
+    example_database.write_solution_analysis(session, solution.id, skipped, on_conflict=OnConflictOpts.SKIP)
+    assert dataclasses_are_equal(example_database.load_solution_analysis(session, solution.id), analysis)
+
+    # OVERWRITE replaces it
+    overwritten = SolutionAnalysis(mainlobe_isppa_Wcm2=[7.0], MI=77.0)
+    example_database.write_solution_analysis(session, solution.id, overwritten, on_conflict=OnConflictOpts.OVERWRITE)
+    assert dataclasses_are_equal(example_database.load_solution_analysis(session, solution.id), overwritten)
+
+def test_load_solution_analysis_missing(example_database:Database, example_session:Session):
+    """Loading a missing analysis raises FileNotFoundError."""
+    with pytest.raises(FileNotFoundError, match="SolutionAnalysis file not found"):
+        example_database.load_solution_analysis(example_session, "bogus_solution_id")
 
 def test_get_photoscan_absolute_filepaths_info(example_database:Database):
     subject_id = "example_subject"

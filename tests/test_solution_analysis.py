@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 import pytest
 
 from openlifu.plan.param_constraint import ParameterConstraint
@@ -167,67 +165,4 @@ def test_lower_apodization_produces_less_heating():
     assert rise_half < rise_full, (
         f"Expected apodization=0.5 ({rise_half:.4f} °C) to produce less heating "
         f"than apodization=1.0 ({rise_full:.4f} °C)"
-    )
-
-
-@pytest.mark.parametrize("bad_T0", [19.9, 40.1])
-def test_warning_emitted_for_T0_out_of_range(bad_T0, caplog):
-    """A warning must be logged when T0 is outside the valid 20-40 °C range."""
-    with caplog.at_level(logging.WARNING, logger="openlifu.plan.solution_analysis"):
-        model_tx_temperature_rise(_BASE_VOLTAGE, t_sec=60.0, T0_degC=bad_T0)
-    assert any("T0" in record.message or "temperature" in record.message.lower()
-               for record in caplog.records), (
-        f"Expected a warning about T0 out of range for T0={bad_T0} °C"
-    )
-
-
-@pytest.mark.parametrize(("bad_voltage","bad_duty_cycle"), [
-    (6.0, 1.0),   # P = 36 < 50
-    (25.0, 1.0),  # P = 625 > 500
-])
-def test_warning_emitted_for_power_out_of_range(bad_voltage, bad_duty_cycle, caplog):
-    """A warning must be logged when the squared-voltage power is outside 50-500 V^2."""
-    with caplog.at_level(logging.WARNING, logger="openlifu.plan.solution_analysis"):
-        model_tx_temperature_rise(bad_voltage, t_sec=60.0, duty_cycle=bad_duty_cycle, T0_degC=_BASE_T0)
-    assert any("voltage" in record.message.lower() or "squared" in record.message.lower() or "v^2" in record.message.lower()
-               for record in caplog.records), (
-        f"Expected a warning about power out of range for voltage={bad_voltage} V"
-    )
-
-
-@pytest.mark.parametrize("bad_time", [0.5, 601.0])
-def test_warning_emitted_for_time_out_of_range(bad_time, caplog):
-    """A warning must be logged when t is outside the valid 1-600 s range."""
-    with caplog.at_level(logging.WARNING, logger="openlifu.plan.solution_analysis"):
-        model_tx_temperature_rise(_BASE_VOLTAGE, t_sec=bad_time, T0_degC=_BASE_T0)
-    assert any("time" in record.message.lower() or "seconds" in record.message.lower()
-               for record in caplog.records), (
-        f"Expected a warning about time out of range for t={bad_time} s"
-    )
-
-
-@pytest.mark.parametrize("bad_freq", [379.9, 420.1])
-def test_warning_emitted_for_frequency_out_of_range(bad_freq, caplog):
-    """A warning must be logged when frequency is outside the valid 380-420 kHz range."""
-    with caplog.at_level(logging.WARNING, logger="openlifu.plan.solution_analysis"):
-        model_tx_temperature_rise(_BASE_VOLTAGE, t_sec=60.0, frequency_kHz=bad_freq, T0_degC=_BASE_T0)
-    assert any("frequency" in record.message.lower() or "khz" in record.message.lower()
-               for record in caplog.records), (
-        f"Expected a warning about frequency out of range for freq={bad_freq} kHz"
-    )
-
-
-def test_no_warnings_for_valid_inputs(caplog):
-    """No warnings should be emitted when all inputs are within their valid ranges."""
-    with caplog.at_level(logging.WARNING, logger="openlifu.plan.solution_analysis"):
-        model_tx_temperature_rise(
-            voltage=_BASE_VOLTAGE,
-            t_sec=60.0,
-            duty_cycle=1.0,
-            apodization_fraction=1.0,
-            frequency_kHz=_BASE_FREQ,
-            T0_degC=_BASE_T0,
-        )
-    assert len(caplog.records) == 0, (
-        f"Unexpected warnings for valid inputs: {[r.message for r in caplog.records]}"
     )

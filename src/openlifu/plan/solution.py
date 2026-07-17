@@ -192,6 +192,80 @@ class Solution:
             dim='focal_point_index',
         )
 
+    def get_mainlobe_mask(self,
+        simulation_result: xa.Dataset | None = None,
+        options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
+        units: str | None = None
+    ) -> xa.DataArray:
+        """Get a masked version of the simulation result where only the mainlobe is unmasked.
+        """
+        return self.get_mask(simulation_result=simulation_result, type='mainlobe', options=options, units=units)
+
+    def get_sidelobe_mask(self,
+        simulation_result: xa.Dataset | None = None,
+        options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
+        units: str | None = None
+    ) -> xa.DataArray:
+        """Get a masked version of the simulation result where only the sidelobe is unmasked.
+        """
+        return self.get_mask(simulation_result=simulation_result, type='sidelobe', options=options, units=units)
+
+    def get_mask(self,
+                 simulation_result: xa.Dataset | None = None,
+                 type='mainlobe',
+                 options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
+                 units: str | None = None) -> xa.DataArray:
+        """Get a masked version of the simulation result where only the mainlobe is unmasked.
+        """
+        if simulation_result is None:
+            if self.simulation_result is None or len(self.simulation_result)==0:
+                raise ValueError("No simulation result provided for masking, and no simulation result found in the Solution.")
+            simulation_result = self.simulation_result
+        simulation_result_scaled = rescale_coords(simulation_result, options.distance_units)
+        masks = []
+        wavelength = options.ref_sound_speed / self.pulse.frequency
+        for focus_index in range(self.num_foci()):
+            focus = self.foci[focus_index].get_position(units=options.distance_units)
+            apodization = self.apodizations[focus_index]
+            origin = self.transducer.get_effective_origin(apodizations=apodization, units=options.distance_units)
+            aperture_dia = self.transducer.get_effective_aperture_radius(apodizations=apodization, units=options.distance_units)*2
+            focal_dist = np.linalg.norm(np.array(focus) - np.array(origin))
+            fnum = np.max([focal_dist / aperture_dia, 1.0])
+            if type == 'mainlobe':
+                if options.mainlobe_radius is None:
+                    distance = fnum * wavelength
+                else:
+                    distance = options.mainlobe_radius
+                aspect_ratio = options.mainlobe_aspect_ratio
+                operator = '<'
+            elif type == 'sidelobe':
+                if options.sidelobe_radius is None:
+                    distance = 2.5 * fnum * wavelength
+                else:
+                    distance = options.sidelobe_radius
+                aspect_ratio = options.mainlobe_aspect_ratio
+                operator = '>'
+            else:
+                raise ValueError(f"Invalid mask type {type}. Must be 'mainlobe' or 'sidelobe'.")
+            mask = get_mask(
+                    simulation_result_scaled.isel(focal_point_index=focus_index),
+                    focus = focus,
+                    origin = origin,
+                    distance = distance,
+                    operator = operator,
+                    aspect_ratio = aspect_ratio
+                )
+            if type == 'sidelobe' and options.sidelobe_zmin is not None:
+                z_mask = simulation_result_scaled.isel(focal_point_index=focus_index).z > options.sidelobe_zmin
+                mask = mask.where(z_mask, False)
+            masks.append(mask)
+        masks = xa.concat(masks, dim='focal_point_index')
+        if units is None and 'units' in simulation_result.coords['x'].attrs:
+            units = simulation_result.coords['x'].attrs['units']
+        if units is not None:
+            masks = rescale_coords(masks, units)
+        return masks
+
     def analyze(self,
                 simulation_result: xa.Dataset | None = None,
                 options: SolutionAnalysisOptions = SolutionAnalysisOptions(),
@@ -211,20 +285,18 @@ class Solution:
         solution_analysis = SolutionAnalysis()
 
         dt = 1 / (self.pulse.frequency * 20)
-        t = self.pulse.calc_time(dt)
-        input_signal_V = self.pulse.calc_pulse(t) * self.voltage
 
         if simulation_result is None:
             if self.simulation_result is None or len(self.simulation_result)==0:
                 raise ValueError("No simulation result provided for analysis, and no simulation result found in the Solution.")
             simulation_result = self.simulation_result
 
-        pnp_MPa_all = rescale_data_arr(rescale_coords(simulation_result['p_min'], options.distance_units),"MPa")
-        ipa_Wcm2_all = rescale_data_arr(rescale_coords(simulation_result['intensity'], options.distance_units), "W/cm^2")
+        simulation_result_scaled = rescale_coords(simulation_result, options.distance_units)
+        pnp_MPa_all = rescale_data_arr(simulation_result_scaled['p_min'],"MPa")
+        ipa_Wcm2_all = rescale_data_arr(simulation_result_scaled['intensity'], "W/cm^2")
 
         if options.sidelobe_radius is np.nan:
             options.sidelobe_radius = options.mainlobe_radius
-
 
         standoff_Z = options.standoff_density * 1500
         c_tic = 40e-3  # W cm-1
@@ -232,19 +304,20 @@ class Solution:
         d_eq_cm = np.sqrt(4*A_cm / np.pi)
         ele_sizes_cm2 = np.array([elem.get_area("cm") for elem in self.transducer.elements])
 
-        # xyz = np.stack(np.meshgrid(*coords, indexing="xy"), axis=-1)  #TODO: if fus.Axis is defined, coords.ndgrid(dim="z")
-        # z_mask = xyz[..., -1] >= options.sidelobe_zmin  #TODO: probably wrong here, should be z{1}>=options.sidelobe_zmin;
-
         solution_analysis.duty_cycle_pulse_train_pct = self.get_pulsetrain_dutycycle()*100
         solution_analysis.duty_cycle_sequence_pct = self.get_sequence_dutycycle()*100
         if self.sequence.pulse_train_interval == 0:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_interval * self.sequence.pulse_count * self.sequence.pulse_train_count)
         else:
             solution_analysis.sequence_duration_s = float(self.sequence.pulse_train_interval * self.sequence.pulse_train_count)
-        ita_mWcm2 = rescale_coords(self.get_ita(intensity=simulation_result['intensity'], units="mW/cm^2"), options.distance_units)
+        ita_mWcm2 = self.get_ita(intensity=simulation_result_scaled['intensity'], units="mW/cm^2")
 
         power_W = np.zeros(self.num_foci())
         TIC = np.zeros(self.num_foci())
+
+        mainlobe_masks = self.get_mainlobe_mask(simulation_result=simulation_result_scaled, options=options)
+        sidelobe_masks = self.get_sidelobe_mask(simulation_result=simulation_result_scaled, options=options)
+
         for focus_index in range(self.num_foci()):
             pnp_MPa = pnp_MPa_all.isel(focal_point_index=focus_index)
             ipa_Wcm2 = ipa_Wcm2_all.isel(focal_point_index=focus_index)
@@ -265,36 +338,31 @@ class Solution:
                 amplitude=self.pulse.amplitude * self.voltage,
             ), axis=1)
 
-            mainlobe_mask = get_mask(
-                pnp_MPa,
-                focus = focus,
-                origin = origin,
-                distance = options.mainlobe_radius,
-                operator = '<',
-                aspect_ratio = options.mainlobe_aspect_ratio
-            )
-
-            sidelobe_mask = get_mask(
-                pnp_MPa,
-                focus = focus,
-                origin = origin,
-                distance = options.sidelobe_radius,
-                operator = '>',
-                aspect_ratio=options.mainlobe_aspect_ratio
-            )
-            z_dim = pnp_MPa.dims[2]
-            z_mask = pnp_MPa.coords[z_dim] > options.sidelobe_zmin
-            sidelobe_mask = sidelobe_mask.where(z_mask, False)
+            mainlobe_mask = mainlobe_masks.isel(focal_point_index=focus_index)
+            sidelobe_mask = sidelobe_masks.isel(focal_point_index=focus_index)
+            z_mask = pnp_MPa.z > options.sidelobe_zmin
+            sidelobe_mask = sidelobe_mask.where(z_mask, other=False)
 
             pnp_mainlobe = pnp_MPa.where(mainlobe_mask)
+            ipa_mainlobe = ipa_Wcm2.where(mainlobe_mask)
             pk = float(pnp_mainlobe.max())
-            mainlobe_focus = find_centroid(pnp_mainlobe, pk*10**(-3/20), "mm")
+            ipk = float(ipa_mainlobe.max())
+            mainlobe_focus = find_centroid(ipa_mainlobe, ipk*10**(-3/20), "mm")
             solution_analysis.focal_centroid_lat_mm += [mainlobe_focus[0]]
             solution_analysis.focal_centroid_ele_mm += [mainlobe_focus[1]]
             solution_analysis.focal_centroid_ax_mm += [mainlobe_focus[2]]
 
             solution_analysis.mainlobe_pnp_MPa += [pk]
             solution_analysis.focal_gain += [pk*1e6/np.max(p0_Pa)]
+
+            if options.beamwidth_radius is None:
+                aperture_dia = self.transducer.get_effective_aperture_radius(apodizations=apodization, units=options.distance_units)*2
+                focal_dist = np.linalg.norm(np.array(focus) - np.array(origin))
+                fnum = np.max([focal_dist / aperture_dia, 1.0])
+                wavelength = options.ref_sound_speed / self.pulse.frequency
+                beamwidth_radius = 2.0 * fnum * wavelength
+            else:
+                beamwidth_radius = options.beamwidth_radius
 
             for dim, named_dim, scale in zip(pnp_MPa.dims, ("lat","ele","ax"), options.mainlobe_aspect_ratio):
                 for threshdB in [3, 6]:
@@ -307,8 +375,8 @@ class Solution:
                         dim=dim,
                         cutoff=cutoff,
                         origin=origin,
-                        min_offset=-scale*options.beamwidth_radius,
-                        max_offset=scale*options.beamwidth_radius)
+                        min_offset=-scale*beamwidth_radius,
+                        max_offset=scale*beamwidth_radius)
                     bw = getunitconversion(options.distance_units, "mm") * bw
                     bw = [*bw0, bw]
                     setattr(solution_analysis, attr_name, bw)
