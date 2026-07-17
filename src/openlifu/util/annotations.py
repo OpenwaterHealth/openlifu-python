@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Annotated, Optional, Tuple
+from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -57,10 +57,10 @@ class OpenLIFUFieldData:
             sibling's unit symbol. Mutually exclusive with ``units``.
     """
 
-    name: Optional[str] = None
-    description: Optional[str] = None
-    units: Optional[str] = None
-    display_units: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
+    units: str | None = None
+    display_units: str | None = None
     unit_options: Tuple[str, ...] = field(default_factory=tuple)
-    precision: Optional[int] = None
-    units_field: Optional[str] = None
+    precision: int | None = None
+    units_field: str | None = None

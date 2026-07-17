@@ -973,12 +973,12 @@ class Database:
             if 'photoscans' not in _raw_session_dict:
                 try:
                     session.photoscans = list(self.get_photoscan_ids(subject.id, session_id) or [])
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     session.photoscans = []
             if 'photocollections' not in _raw_session_dict:
                 try:
                     session.photocollections = list(self.get_photocollection_reference_numbers(subject.id, session_id) or [])
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     session.photocollections = []
             # Drop any transducer_tracking_results whose photoscan_id no
             # longer exists in this session's photoscans index. The session

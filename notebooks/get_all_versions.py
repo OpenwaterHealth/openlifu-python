@@ -3,23 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import threading
 import time
-from pathlib import Path
 
 if os.name == 'nt':
-    import msvcrt
+    pass
 else:
-    import select
+    pass
 
-import numpy as np
 
-from openlifu.bf.pulse import Pulse
-from openlifu.bf.sequence import Sequence
-from openlifu.db import Database
-from openlifu.geo import Point
 from openlifu.io.LIFUInterface import LIFUInterface
-from openlifu.plan.solution import Solution
 
 # set PYTHONPATH=%cd%\src;%PYTHONPATH%
 # python notebooks/test_watertank.py
@@ -102,11 +94,9 @@ logger.info("Enumerate TX7332 chips")
 # num_tx_devices = interface.txdevice.get_tx_module_count()
 num_tx_devices = 10
 
-for module in range(0, num_tx_devices+1):
+for module in range(num_tx_devices+1):
     try:
         tx_firmware_version = interface.txdevice.get_version(module=module)
         logger.info(f"TX Firmware Version: {tx_firmware_version}")
     except Exception as e:
         logger.error(f"Error querying TX firmware version: {e}")
-
-

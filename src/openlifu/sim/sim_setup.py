@@ -248,10 +248,9 @@ class SimSetup(DictMixin):
         Spacing and extents are converted to millimeters regardless of the
         configured storage units.
         """
-        from openlifu.util.units import getunitconversion
         try:
             scale = getunitconversion(self.units, "mm")
-        except Exception:
+        except ValueError:
             scale = 1.0
         spacing_mm = self.spacing * scale
         x0, x1 = self.x_extent[0] * scale, self.x_extent[1] * scale

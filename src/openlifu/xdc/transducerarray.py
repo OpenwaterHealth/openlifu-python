@@ -182,7 +182,7 @@ def _canonicalize_array_for_compare(arr: TransducerArray) -> dict:
     def _norm(obj):
         if isinstance(obj, np.ndarray):
             return _norm(obj.tolist())
-        if isinstance(obj, (list, tuple)):
+        if isinstance(obj, list | tuple):
             return [_norm(x) for x in obj]
         if isinstance(obj, dict):
             return {k: _norm(v) for k, v in obj.items()}
@@ -306,7 +306,7 @@ class TransducerArray(DictMixin):
             f"t=[{_format_scalar(m.transform[0, 3])}, {_format_scalar(m.transform[1, 3])}, {_format_scalar(m.transform[2, 3])}]"
             "</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            f"{m._repr_html_()}"
+            f"{m._repr_html_()}"  # pylint: disable=protected-access
             "</div>"
             "</details>"
             for i, m in enumerate(self.modules)
@@ -697,7 +697,9 @@ class TransducerArray(DictMixin):
             if db is not None:
                 try:
                     loaded = db.load_transducer(template_id, convert_array=False)
-                except Exception:  # -- db can raise many things; treat as "not found"
+                except Exception:  # pylint: disable=broad-exception-caught
+                    # The optional database is only a source of template geometry.
+                    # If it cannot supply one, use the configured fallback below.
                     loaded = None
                 if isinstance(loaded, TransducerArray):
                     template = loaded
@@ -719,12 +721,12 @@ class TransducerArray(DictMixin):
         if db is not None:
             try:
                 known_ids = list(db.get_transducer_ids() or [])
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 known_ids = []
             if arr.id in known_ids:
                 try:
                     db_arr = db.load_transducer(arr.id, convert_array=False)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     db_arr = None
                 if isinstance(db_arr, TransducerArray) and not arrays_structurally_equal(arr, db_arr):
                     warnings.warn(

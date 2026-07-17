@@ -217,7 +217,7 @@ class Transducer:
             f"<span>{html.escape(_format_sensitivity_summary(_combine_sensitivities(element.sensitivity, module_sens_at_f)))}</span>"
             "</summary>"
             "<div style='margin:6px 0 0 14px;padding-left:10px;border-left:2px solid rgba(127,127,127,0.35);'>"
-            f"{element._repr_html_()}"
+            f"{element._repr_html_()}"  # pylint: disable=protected-access
             "</div>"
             "</details>"
             for element in self.elements
@@ -437,7 +437,7 @@ class Transducer:
             merged_array.module_invert += xform_array.module_invert
         for k, v in merged_attrs.items():
             merged_array.__setattr__(k, v)
-        merged_array._normalize_standoff_transform()
+        merged_array._normalize_standoff_transform()  # pylint: disable=protected-access
         return merged_array
 
     def numelements(self):

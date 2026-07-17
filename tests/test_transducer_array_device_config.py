@@ -3,9 +3,9 @@
 """
 from __future__ import annotations
 
+import warnings
 from types import SimpleNamespace
 from typing import Sequence
-import warnings
 
 import pytest
 
@@ -230,4 +230,3 @@ def test_arrays_structurally_equal_handles_path_basename_normalization():
     b.modules[0].registration_surface_filename = "/abs/path/regsurf.stl"
     a.modules[0].registration_surface_filename = "regsurf.stl"
     assert arrays_structurally_equal(a, b)
-

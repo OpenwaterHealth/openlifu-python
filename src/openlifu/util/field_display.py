@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass
-from typing import Any, Optional, Tuple, get_args, get_origin
+from dataclasses import is_dataclass
+from typing import Any, Tuple, get_args, get_origin
 
 try:
     # Python 3.10+ provides typing.get_type_hints with include_extras, but the
     # rest of the codebase already uses ``get_type_hints`` from ``typing``.
     from typing import get_type_hints as _get_type_hints
 except ImportError:  # pragma: no cover - defensive
-    from typing_extensions import get_type_hints as _get_type_hints  # type: ignore
+    from typing_extensions import get_type_hints as _get_type_hints
 
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.units import getunitconversion
 
 
-def get_field_metadata(cls: type, field_name: str) -> Optional[OpenLIFUFieldData]:
+def get_field_metadata(cls: type, field_name: str) -> OpenLIFUFieldData | None:
     """Return the :class:`OpenLIFUFieldData` annotation attached to ``cls.field_name``.
 
     Returns ``None`` if the field has no such annotation, if it has no
@@ -38,7 +38,7 @@ def get_field_metadata(cls: type, field_name: str) -> Optional[OpenLIFUFieldData
     return None
 
 
-def resolve_units(meta: OpenLIFUFieldData, instance: Any) -> Tuple[Optional[str], Optional[str]]:
+def resolve_units(meta: OpenLIFUFieldData, instance: Any) -> Tuple[str | None, str | None]:
     """Return ``(storage_units, display_units)`` for ``meta`` applied to ``instance``.
 
     * Storage unit: ``instance.<meta.units_field>`` when ``units_field`` is set,
@@ -59,7 +59,7 @@ def resolve_units(meta: OpenLIFUFieldData, instance: Any) -> Tuple[Optional[str]
     return storage, display
 
 
-def to_display(value: float, meta: OpenLIFUFieldData, instance: Optional[Any] = None) -> float:
+def to_display(value: float, meta: OpenLIFUFieldData, instance: Any | None = None) -> float:
     """Convert ``value`` from storage units to ``meta``'s display units.
 
     Falls back to the input value if conversion is not possible (no units
@@ -75,7 +75,7 @@ def to_display(value: float, meta: OpenLIFUFieldData, instance: Optional[Any] = 
         return value
 
 
-def from_display(value: float, meta: OpenLIFUFieldData, instance: Optional[Any] = None) -> float:
+def from_display(value: float, meta: OpenLIFUFieldData, instance: Any | None = None) -> float:
     """Inverse of :func:`to_display`: convert from display units to storage units."""
     if value is None:
         return value
@@ -90,8 +90,8 @@ def from_display(value: float, meta: OpenLIFUFieldData, instance: Optional[Any] 
 
 def format_value(
     value: Any,
-    meta: Optional[OpenLIFUFieldData] = None,
-    instance: Optional[Any] = None,
+    meta: OpenLIFUFieldData | None = None,
+    instance: Any | None = None,
 ) -> str:
     """Format ``value`` using the precision/units in ``meta``.
 
@@ -108,7 +108,7 @@ def format_value(
         return str(value)
 
     # Tuple/list: format element-wise, share unit suffix at the end
-    if isinstance(value, (tuple, list)):
+    if isinstance(value, tuple | list):
         formatted = [format_value(v, meta, instance) for v in value]
         # Strip per-element unit so we don't repeat it; we'll add once at the end.
         unit_suffix = _display_unit_suffix(meta, instance)
@@ -120,7 +120,7 @@ def format_value(
     if isinstance(value, bool):
         return "yes" if value else "no"
 
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         # Convert to the display unit. We always go through float so that, for
         # an int value with display-unit conversion (e.g. an integer count of
         # microns displayed in mm), we still get the proper scaled number.
@@ -136,7 +136,7 @@ def format_value(
     return str(value)
 
 
-def _display_unit_suffix(meta: OpenLIFUFieldData, instance: Optional[Any]) -> str:
+def _display_unit_suffix(meta: OpenLIFUFieldData, instance: Any | None) -> str:
     _, display_unit = (
         resolve_units(meta, instance) if instance is not None else (meta.units, meta.display_units or meta.units)
     )
@@ -151,7 +151,7 @@ def _strip_trailing_zeros(text: str) -> str:
     return stripped if stripped not in ("", "-") else "0"
 
 
-def _format_number(value: Any, precision: Optional[int]) -> str:
+def _format_number(value: Any, precision: int | None) -> str:
     """Format a number with ``precision`` decimal places, stripping trailing zeros.
 
     Falls back to ``%g`` formatting whenever a fixed-precision render would
@@ -177,7 +177,7 @@ def _format_number(value: Any, precision: Optional[int]) -> str:
     return fixed
 
 
-def field_summary(instance: Any, field_name: str, label: Optional[str] = None) -> Optional[str]:
+def field_summary(instance: Any, field_name: str, label: str | None = None) -> str | None:
     """Return ``"<label>: <formatted value>"`` for one field, suitable for joining
     into a section summary, or ``None`` if the field doesn't exist on the
     instance."""

@@ -17,7 +17,6 @@ from openlifu.cloud.components.runs import Runs
 from openlifu.cloud.components.sessions import Sessions
 from openlifu.cloud.components.solutions import Solutions
 from openlifu.cloud.components.subjects import Subjects
-from openlifu.cloud.components.systems import Systems
 from openlifu.cloud.components.transducers import Transducers
 from openlifu.cloud.components.users import Users
 from openlifu.cloud.components.volumes import Volumes
