@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 import numpy as np
 from pint import UnitRegistry
@@ -100,8 +101,35 @@ def _normalize_unit_symbol(unit: str) -> str:
     return unit
 
 
-def _quantity(unit: str):
-    return Q_(1, _normalize_unit(unit))
+def _is_multiplicative(unit: str) -> bool:
+    """Return whether a unit preserves zero when converted to base units."""
+    zero_in_base_units = Q_(0, unit).to_base_units().magnitude
+    return bool(zero_in_base_units == 0)
+
+
+@lru_cache(maxsize=256)
+def _get_conversion_factor(from_unit: str, to_unit: str) -> float:
+    """Return a cached multiplicative conversion factor for a unit pair."""
+    normalized_from_unit = _normalize_unit(from_unit)
+    normalized_to_unit = _normalize_unit(to_unit)
+
+    from_is_angle = normalized_from_unit.lower() in _ANGLE_UNITS
+    to_is_angle = normalized_to_unit.lower() in _ANGLE_UNITS
+
+    # Preserve the legacy distinction between angles and dimensionless values.
+    if from_is_angle != to_is_angle:
+        type0 = getunittype(from_unit)
+        type1 = getunittype(to_unit)
+        raise ValueError(f"Unit type mismatch ({type0}) vs ({type1})")
+
+    converted = Q_(1, normalized_from_unit).to(normalized_to_unit)
+
+    if not (_is_multiplicative(normalized_from_unit) and _is_multiplicative(normalized_to_unit)):
+        raise ValueError(
+            f"Cannot express conversion from {from_unit} to {to_unit} as a multiplicative scale"
+        )
+
+    return float(converted.magnitude)
 
 
 def getunittype(unit):
@@ -134,6 +162,12 @@ def getunittype(unit):
 
 
 def getunitconversion(from_unit, to_unit, unitratio=None, constant=None):
+    """Return the multiplicative scale factor between two units.
+
+    Raises:
+        ValueError: If the units are incompatible, undefined, or cannot be
+            converted using a multiplicative scale factor.
+    """
     if not from_unit:
         return 1.0
 
@@ -157,7 +191,7 @@ def getunitconversion(from_unit, to_unit, unitratio=None, constant=None):
             raise ValueError(f"Unit type mismatch {type0} -> ({typen}/{typed}) -> {type1}")
     else:
         try:
-            scl = _quantity(from_unit).to(_normalize_unit(to_unit)).magnitude
+            scl = _get_conversion_factor(from_unit, to_unit)
         except DimensionalityError as exc:
             type0 = getunittype(from_unit)
             type1 = getunittype(to_unit)
