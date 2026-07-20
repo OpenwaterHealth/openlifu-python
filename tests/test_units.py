@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from xarray import DataArray, Dataset
 
+import openlifu.util.units as unit_utils
 from openlifu.util.units import (
     get_ndgrid_from_arr,
     getsiscale,
@@ -144,6 +145,50 @@ def test_getunittype(unit, expected):
 )
 def test_getunitconversion_pint_improvements(from_unit, to_unit, expected):
     assert np.allclose(getunitconversion(from_unit, to_unit), expected)
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit"),
+    [
+        ("degC", "degF"),
+        ("degF", "degC"),
+        ("degC", "degC"),
+        ("dB", "dimensionless"),
+        ("dimensionless", "dB"),
+        ("dB", "dB"),
+    ],
+)
+def test_getunitconversion_rejects_non_multiplicative_units(from_unit, to_unit):
+    with pytest.raises(ValueError, match="multiplicative scale"):
+        getunitconversion(from_unit, to_unit)
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit"),
+    [
+        ("deg", "dimensionless"),
+        ("dimensionless", "rad"),
+        ("\u00b0", "dimensionless"),
+    ],
+)
+def test_getunitconversion_preserves_angle_mismatch(from_unit, to_unit):
+    with pytest.raises(ValueError, match="Unit type mismatch"):
+        getunitconversion(from_unit, to_unit)
+
+
+def test_getunitconversion_caches_direct_conversions():
+    unit_utils._get_conversion_factor.cache_clear()
+
+    getunitconversion("m", "mm")
+    cache_after_first_call = unit_utils._get_conversion_factor.cache_info()
+
+    getunitconversion("m", "mm")
+    cache_after_second_call = unit_utils._get_conversion_factor.cache_info()
+
+    assert cache_after_first_call.misses == 1
+    assert cache_after_first_call.hits == 0
+    assert cache_after_second_call.misses == 1
+    assert cache_after_second_call.hits == 1
 
 
 @pytest.mark.parametrize(
