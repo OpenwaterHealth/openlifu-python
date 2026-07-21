@@ -4,9 +4,12 @@ import numpy as np
 import pytest
 from xarray import DataArray, Dataset
 
+import openlifu.util.units as unit_utils
 from openlifu.util.units import (
     get_ndgrid_from_arr,
     getsiscale,
+    getunitconversion,
+    getunittype,
     rescale_coords,
     rescale_data_arr,
 )
@@ -51,6 +54,154 @@ def test_getsiscale():
     assert getsiscale('MHz', 'frequency') == 1e6
     assert getsiscale('GHz', 'frequency') == 1e9
     assert getsiscale('THz', 'frequency') == 1e12
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit", "expected"),
+    [
+        ("m", "mm", 1e3),
+        ("mm", "m", 1e-3),
+        ("m", "cm", 1e2),
+        ("cm", "m", 1e-2),
+        ("m2", "cm2", 1e4),
+        ("cm2", "m2", 1e-4),
+        ("m^2", "cm^2", 1e4),
+        ("cm^2", "m^2", 1e-4),
+        ("m3", "cm3", 1e6),
+        ("cm3", "m3", 1e-6),
+        ("s", "ms", 1e3),
+        ("ms", "s", 1e-3),
+        ("sec", "s", 1.0),
+        ("min", "s", 60.0),
+        ("hr", "s", 3600.0),
+        ("day", "s", 86400.0),
+        ("Hz", "kHz", 1e-3),
+        ("kHz", "Hz", 1e3),
+        ("Pa", "kPa", 1e-3),
+        ("kPa", "Pa", 1e3),
+        ("W", "mW", 1e3),
+        ("mW", "W", 1e-3),
+        ("deg", "rad", np.pi / 180),
+        ("rad", "deg", 180 / np.pi),
+        ("micron", "m", 1e-6),
+        ("um", "m", 1e-6),
+        ("Pa", "MPa", 1e-6),
+        ("W/cm^2", "W/m^2", 1e4),
+        ("mW/cm^2", "W/m^2", 10),
+        ("MHz", "Hz", 1e6),
+    ],
+)
+def test_getunitconversion(from_unit, to_unit, expected):
+    assert np.allclose(getunitconversion(from_unit, to_unit), expected)
+
+
+@pytest.mark.parametrize(
+    ("unit", "expected"),
+    [
+        ("mm", "distance"),
+        ("mm^2", "area"),
+        ("mm^3", "volume"),
+        ("s", "time"),
+        ("MHz", "frequency"),
+        ("MPa", "pressure"),
+        ("W", "watt"),
+        ("deg", "angle"),
+        ("micron", "distance"),
+        ("microns", "distance"),
+        ("meter", "distance"),
+        ("meters", "distance"),
+        ("m2", "area"),
+        ("m3", "volume"),
+        ("sec", "time"),
+        ("minute", "time"),
+        ("minutes", "time"),
+        ("min", "time"),
+        ("mins", "time"),
+        ("hour", "time"),
+        ("hours", "time"),
+        ("hr", "time"),
+        ("hrs", "time"),
+        ("day", "time"),
+        ("days", "time"),
+        ("d", "time"),
+        ("rad", "angle"),
+        ("\u00b0", "angle"),
+    ],
+)
+def test_getunittype(unit, expected):
+    assert getunittype(unit) == expected
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit", "expected"),
+    [
+        ("microns", "m", 1e-6),
+        ("cc", "m^3", 1e-6),
+        ("msec", "s", 1e-3),
+        ("usec", "s", 1e-6),
+        ("miliPa", "Pa", 1e-3),
+        ("W/cm^2", "W/m^2", 1e4),
+    ],
+)
+def test_getunitconversion_pint_improvements(from_unit, to_unit, expected):
+    assert np.allclose(getunitconversion(from_unit, to_unit), expected)
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit"),
+    [
+        ("degC", "degF"),
+        ("degF", "degC"),
+        ("degC", "degC"),
+        ("dB", "dimensionless"),
+        ("dimensionless", "dB"),
+        ("dB", "dB"),
+    ],
+)
+def test_getunitconversion_rejects_non_multiplicative_units(from_unit, to_unit):
+    with pytest.raises(ValueError, match="multiplicative scale"):
+        getunitconversion(from_unit, to_unit)
+
+
+@pytest.mark.parametrize(
+    ("from_unit", "to_unit"),
+    [
+        ("deg", "dimensionless"),
+        ("dimensionless", "rad"),
+        ("\u00b0", "dimensionless"),
+    ],
+)
+def test_getunitconversion_preserves_angle_mismatch(from_unit, to_unit):
+    with pytest.raises(ValueError, match="Unit type mismatch"):
+        getunitconversion(from_unit, to_unit)
+
+
+def test_getunitconversion_caches_direct_conversions():
+    unit_utils._get_conversion_factor.cache_clear()
+
+    getunitconversion("m", "mm")
+    cache_after_first_call = unit_utils._get_conversion_factor.cache_info()
+
+    getunitconversion("m", "mm")
+    cache_after_second_call = unit_utils._get_conversion_factor.cache_info()
+
+    assert cache_after_first_call.misses == 1
+    assert cache_after_first_call.hits == 0
+    assert cache_after_second_call.misses == 1
+    assert cache_after_second_call.hits == 1
+
+
+@pytest.mark.parametrize(
+    ("unit", "expected"),
+    [
+        ("cc", "volume"),
+        ("m/s", "other"),
+        ("W/cm^2", "other"),
+        ("amps", "other"),
+    ],
+)
+def test_getunittype_pint_improvements(unit, expected):
+    assert getunittype(unit) == expected
 
 
 def test_rescale_data_arr(example_xarr: Dataset):

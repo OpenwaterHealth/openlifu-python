@@ -1,70 +1,62 @@
 # openlifu-python Release Process
 
-This document describes how to release the `openlifu` Python package. This
-repository is the upstream library for SlicerOpenLIFU and openlifu-app.
+This document describes how to release the `openlifu` Python package. Publishing
+a GitHub release triggers the workflow that publishes the package to PyPI.
 
-It comes down to just making a git tag and publishing a GitHub release. A PyPI
-publishing workflow is automatically triggered.
+## Versioning and Branches
 
-## Versioning
-
-Use git tags of the form:
-
-```text
-vX.Y.Z
-```
+Use git tags of the form `vX.Y.Z`. A new release line begins at `vX.Y.0`, and
+patch releases increment `Z`.
 
 The package version is derived from git metadata by `hatch-vcs`; do not maintain
 a separate hard-coded package version.
 
-## Release steps
+`main` is the development branch. Create `release/X.Y` for each release line and
+tag all releases in that line from the branch. New feature work continues on
+`main`.
 
-1. Check whether the sample database needs a matching release tag. If the
-   database format, bundled example data, protocols, transducers, or
-   compatibility expectations changed, publish or identify the corresponding
-   `openlifu-sample-database` tag before releasing, and update the
-   openlifu-python README to reference the new sample database tag.
+## Release Steps
+
+1. If sample database compatibility changed, publish or identify the matching
+   `openlifu-sample-database` tag, update the openlifu-python README, and note
+   the change in the release notes.
 2. Confirm `main` is ready for release and CI is passing.
-3. Create and push the openlifu-python git tag:
+3. Create and push the release branch:
 
    ```bash
    git checkout main
    git pull
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
+   git checkout -b release/X.Y
+   git push -u origin release/X.Y
    ```
 
-4. Draft a GitHub release from the tag.
-5. Publish the GitHub release.
+4. Tag the release from the release branch:
 
-The CD workflow should trigger and the package should automatically become
-available on PyPI.
+   ```bash
+   git tag vX.Y.0
+   git push origin vX.Y.0
+   ```
 
-## Release Branches
+5. Draft and publish the GitHub release from `vX.Y.0`.
 
-This repository does not normally need release branches. Prefer the tag-only
-flow above.
+## Patch Releases
 
-Create a release branch only when an older library line needs maintenance after
-`main` has moved on:
+1. Merge the fix to `main`, then cherry-pick it to the release branch. A fix
+   specific to the released line may be committed directly to that branch.
 
-```text
-release/0.21
-  v0.21.1
-  v0.21.2
-```
+   ```bash
+   git checkout release/X.Y
+   git pull
+   git cherry-pick <fix-commit-sha>
+   git push origin release/X.Y
+   ```
 
-In that case, merge fixes to `main` first when practical, then cherry-pick them
-to the maintenance branch.
+2. Confirm the release branch is ready and CI is passing.
+3. Tag the next patch release:
 
-## Downstream Updates
+   ```bash
+   git tag vX.Y.N
+   git push origin vX.Y.N
+   ```
 
-Downstream repositories can update their pins when ready:
-
-- SlicerOpenLIFU pins `openlifu` in
-  `OpenLIFULib/OpenLIFULib/Resources/python-requirements.txt`.
-- OpenLIFU-app gets the `openlifu` version indirectly through its pinned
-  SlicerOpenLIFU `GIT_TAG`.
-
-If this release changes database compatibility, call that out in the GitHub
-release notes.
+4. Draft and publish the GitHub release from `vX.Y.N`.
