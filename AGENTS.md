@@ -71,8 +71,8 @@ nox -s docs
 CI runs on push to main and on PRs (`.github/workflows/ci.yml`):
 
 1. **Commit message check** (PRs only): every commit must reference a GitHub
-   issue (`#123` or full URL). Exceptions: Bump, Merge, Revert, fixup!, squash!,
-   amend! commits.
+   issue (`#123` or full URL). Exceptions: Bump, Merge, Release, Revert, fixup!,
+   squash!, amend! commits.
 2. **Pre-commit + PyLint**: linting on ubuntu.
 3. **Tests**: matrix of Python {3.10, 3.12} x {ubuntu, windows, macos} with
    coverage uploaded to Codecov.
