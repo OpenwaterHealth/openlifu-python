@@ -22,7 +22,7 @@ DEFAULT_SIDELOBE_ZMIN_MM = 10.0
 PARAM_FORMATS = {
     "mainlobe_pnp_MPa": ["max", "0.3f", "MPa", "Mainlobe Peak Negative Pressure"],
     "mainlobe_isppa_Wcm2": ["max", "0.1f", "W/cm^2", "Mainlobe I_SPPA"],
-    "mainlobe_ispta_mWcm2": [None, "0.1f", "mW/cm^2", "Mainlobe I_SPTA"],
+    "mainlobe_ispta_mWcm2": ["max", "0.1f", "mW/cm^2", "Mainlobe I_SPTA"],
     "target_position_lat_mm": ["mean", "0.1f", "mm", "Target Position (Lateral)"],
     "target_position_ele_mm": ["mean", "0.1f", "mm", "Target Position (Elevation)"],
     "target_position_ax_mm": ["mean", "0.1f", "mm", "Target Position (Axial)"],
@@ -61,7 +61,7 @@ class SolutionAnalysis(DictMixin):
     mainlobe_isppa_Wcm2: Annotated[list[float], OpenLIFUFieldData("Mainlobe ISPPA", "Spatial peak pulse average intensity in the mainlobe, in W/cm²")] = field(default_factory=list)
     """Spatial peak pulse average intensity in the mainlobe, in W/cm²"""
 
-    mainlobe_ispta_mWcm2: Annotated[float | None, OpenLIFUFieldData("Mainlobe ISPTA", "Spatial peak time average intensity in the mainlobe, in mW/cm²")] = None
+    mainlobe_ispta_mWcm2: Annotated[list[float], OpenLIFUFieldData("Mainlobe ISPTA", "Spatial peak time average intensity in the mainlobe, in mW/cm²")] = field(default_factory=list)
     """Spatial peak time average intensity in the mainlobe, in mW/cm²"""
 
     target_position_lat_mm: Annotated[list[float], OpenLIFUFieldData("Target position lateral (mm)", "Lateral position of the target, in mm")] = field(default_factory=list)

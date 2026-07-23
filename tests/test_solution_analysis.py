@@ -16,7 +16,7 @@ def example_solution_analysis() -> SolutionAnalysis:
     return SolutionAnalysis(
         mainlobe_pnp_MPa=[1.1, 1.2],
         mainlobe_isppa_Wcm2=[10.0, 12.0],
-        mainlobe_ispta_mWcm2=[500.0, 520.0],
+        mainlobe_ispta_mWcm2=500.0,
         beamwidth_lat_3dB_mm=[1.5, 1.6],
         beamwidth_ele_3dB_mm=[2.0, 2.1],
         beamwidth_ax_3dB_mm=[3.0, 3.1],
