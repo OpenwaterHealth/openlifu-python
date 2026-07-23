@@ -716,6 +716,109 @@ def test_load_solution_analysis_missing(example_database:Database, example_sessi
     with pytest.raises(FileNotFoundError, match="SolutionAnalysis file not found"):
         example_database.load_solution_analysis(example_session, "bogus_solution_id")
 
+def test_delete_solution(example_database: Database, example_subject: Subject):
+    """delete_solution removes the on-disk files and trims the solutions index."""
+    session = Session(name="bleh", id='delete_solution_session', subject_id=example_subject.id)
+    solution_a = Solution(name="A", id='sol_a')
+    solution_b = Solution(name="B", id='sol_b')
+    example_database.write_session(example_subject, session)
+    example_database.write_solution(session, solution_a)
+    example_database.write_solution(session, solution_b)
+
+    solution_a_dir = example_database.get_solution_filepath(session.subject_id, session.id, solution_a.id).parent
+    assert solution_a_dir.is_dir()
+    assert set(example_database.get_solution_ids(session.subject_id, session.id)) == {'sol_a', 'sol_b'}
+
+    example_database.delete_solution(session, solution_a.id)
+
+    assert not solution_a_dir.exists()
+    assert example_database.get_solution_ids(session.subject_id, session.id) == ['sol_b']
+
+    # ERROR when the solution does not exist
+    with pytest.raises(ValueError, match="does not exist"):
+        example_database.delete_solution(session, 'sol_a')
+
+    # SKIP is a no-op when the solution does not exist
+    example_database.delete_solution(session, 'sol_a', on_conflict=OnConflictOpts.SKIP)
+    assert example_database.get_solution_ids(session.subject_id, session.id) == ['sol_b']
+
+def test_purge_orphaned_solutions(example_database: Database, example_subject: Subject):
+    """purge_orphaned_solutions deletes on-disk solutions not tracked by session.solutions."""
+    session = Session(name="bleh", id='purge_orphans_session', subject_id=example_subject.id)
+    example_database.write_session(example_subject, session)
+    for sid in ('sol_keep', 'sol_orphan_1', 'sol_orphan_2'):
+        example_database.write_solution(session, Solution(name=sid, id=sid))
+
+    session.solutions = [
+        SolutionInfo(
+            solution_id='sol_keep',
+            protocol_id='proto',
+            target_id='tgt',
+            transducer_id='xdc',
+            transducer_transform_source='virtual_fit',
+        ),
+    ]
+
+    purged = example_database.purge_orphaned_solutions(session)
+
+    assert set(purged) == {'sol_orphan_1', 'sol_orphan_2'}
+    assert example_database.get_solution_ids(session.subject_id, session.id) == ['sol_keep']
+    keep_dir = example_database.get_solution_filepath(session.subject_id, session.id, 'sol_keep').parent
+    orphan_dir = example_database.get_solution_filepath(session.subject_id, session.id, 'sol_orphan_1').parent
+    assert keep_dir.is_dir()
+    assert not orphan_dir.exists()
+
+    # Re-running is a no-op
+    assert example_database.purge_orphaned_solutions(session) == []
+
+def test_purge_orphaned_solutions_empty_solutions_list_purges_everything(
+    example_database: Database, example_subject: Subject,
+):
+    """An empty session.solutions list is authoritative: every on-disk solution is orphaned.
+
+    This is the deliberate destructive-legacy semantic chosen for SlicerOpenLIFU#611.
+    Legacy sessions predating the SolutionInfo feature carry ``solutions == []`` and
+    will have their on-disk solutions purged on the next save.
+    """
+    session = Session(name="bleh", id='purge_all_session', subject_id=example_subject.id)
+    example_database.write_session(example_subject, session)
+    for sid in ('sol_x', 'sol_y'):
+        example_database.write_solution(session, Solution(name=sid, id=sid))
+
+    assert session.solutions == []
+
+    purged = example_database.purge_orphaned_solutions(session)
+
+    assert set(purged) == {'sol_x', 'sol_y'}
+    assert example_database.get_solution_ids(session.subject_id, session.id) == []
+
+def test_purge_orphaned_solutions_tolerates_tracked_id_missing_on_disk(
+    example_database: Database, example_subject: Subject,
+):
+    """A SolutionInfo whose solution_id is not on disk is silently ignored by the purge."""
+    session = Session(name="bleh", id='purge_missing_session', subject_id=example_subject.id)
+    example_database.write_session(example_subject, session)
+    example_database.write_solution(session, Solution(name='on_disk', id='on_disk'))
+
+    # Track one solution that exists on disk and one that does not.
+    session.solutions = [
+        SolutionInfo(
+            solution_id='on_disk',
+            protocol_id='proto', target_id='tgt', transducer_id='xdc',
+            transducer_transform_source='virtual_fit',
+        ),
+        SolutionInfo(
+            solution_id='never_written',
+            protocol_id='proto', target_id='tgt', transducer_id='xdc',
+            transducer_transform_source='virtual_fit',
+        ),
+    ]
+
+    purged = example_database.purge_orphaned_solutions(session)
+
+    assert purged == []
+    assert example_database.get_solution_ids(session.subject_id, session.id) == ['on_disk']
+
 def test_get_photoscan_absolute_filepaths_info(example_database:Database):
     subject_id = "example_subject"
     session_id = "example_session"

@@ -619,6 +619,66 @@ class Database:
         self.logger.info(f"Loaded SolutionAnalysis for solution {solution_id}")
         return analysis
 
+    def delete_solution(
+        self,
+        session: Session,
+        solution_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a solution and its associated files (analysis, .nc) from the database.
+
+        Removes the ``{session_dir}/solutions/{solution_id}/`` directory and drops
+        ``solution_id`` from the session's ``solutions.json`` index.
+
+        Args:
+            session: Session that owns the solution.
+            solution_id: ID of the solution to delete.
+            on_conflict: Behavior when the solution does not exist ('error' or 'skip').
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        solution_ids = self.get_solution_ids(session.subject_id, session.id)
+
+        if solution_id not in solution_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Solution ID {solution_id} does not exist for session {session.id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete solution ID {solution_id} as it does not exist for session {session.id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        solution_dir = self.get_solution_filepath(session.subject_id, session.id, solution_id).parent
+        if solution_dir.is_dir():
+            shutil.rmtree(solution_dir)
+
+        solution_ids.remove(solution_id)
+        self.write_solution_ids(session, solution_ids)
+
+        self.logger.info(f"Removed solution with ID {solution_id} from the database.")
+
+    def purge_orphaned_solutions(self, session: Session) -> List[str]:
+        """Delete any on-disk solutions for ``session`` that are not tracked by ``session.solutions``.
+
+        The authoritative list of solutions belonging to a session is
+        ``session.solutions`` (a list of ``SolutionInfo``). This method reconciles the on-disk state
+        against that list: any ``{session_dir}/solutions/{sid}/`` whose ``sid`` is not in
+        ``{si.solution_id for si in session.solutions}`` is removed, and the ``solutions.json`` index
+        is trimmed accordingly.
+
+        Returns:
+            List of solution IDs that were purged (may be empty).
+        """
+        tracked_ids = {si.solution_id for si in session.solutions}
+        on_disk_ids = self.get_solution_ids(session.subject_id, session.id)
+        purged = [sid for sid in on_disk_ids if sid not in tracked_ids]
+        for sid in purged:
+            self.delete_solution(session, sid, on_conflict=OnConflictOpts.SKIP)
+        return purged
+
     def choose_session(self, subject, options=None):
         # Implement the logic to choose a session
         raise NotImplementedError("Method not yet implemented")
