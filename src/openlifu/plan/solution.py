@@ -90,6 +90,9 @@ class Solution:
     what determines how many times each point will be used.
     """
 
+    order: Annotated[list[int] | None, OpenLIFUFieldData("Focus order", "Order of Foci (1-indexed) in the sequence")] = None
+    """Order of Foci (1-indexed) in the sequence. This is a list of integers that specifies the order in which the foci are used in the pulse sequence. If None, the foci are used in the order they are listed in the `foci` attribute."""
+
     # there was "target_id" in the matlab software, but here we do not have the concept of a target ID.
     # I believe this was only needed in the matlab software because solutions were organized by target rather
     # than having their own unique solution ID. We do have unique solution IDs so it's possible we don't need
@@ -700,6 +703,10 @@ class Solution:
             intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
         sequence_dutycycle = self.get_sequence_dutycycle()
         pulse_seq = (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
+        if self.order is not None:
+            pulse_seq = np.array(list(self.order)*(self.sequence.pulse_count//len(self.order)))
+        else:
+            pulse_seq = np.arange(self.sequence.pulse_count) % self.num_foci() + 1
         counts = [np.sum(pulse_seq == (i+1)) for i in range(self.num_foci())]
         counts_da = xa.DataArray(counts, dims=['focal_point_index'], coords={'focal_point_index': np.arange(self.num_foci())})
         return ((intensity_scaled * counts_da).sum(dim='focal_point_index') / counts_da.sum(dim='focal_point_index')) * sequence_dutycycle

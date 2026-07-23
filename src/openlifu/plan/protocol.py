@@ -328,6 +328,7 @@ class Protocol:
         apodizations_to_stack: List[np.ndarray] = []
         simulation_result_aggregated: xa.Dataset = xa.Dataset()
         foci: List[Point] = self.focal_pattern.get_targets(target)
+        order = self.focal_pattern.get_order()
 
         # updating solution sequence if pulse mismatch
         if (self.sequence.pulse_count % len(foci)) != 0:
@@ -357,6 +358,7 @@ class Protocol:
             voltage=voltage,
             sequence=self.sequence,
             foci=foci,
+            order=order,
             target=target,
             simulation_result=xa.Dataset(),
             description= (
@@ -386,7 +388,7 @@ class Protocol:
             pnp_aggregated = solution.simulation_result['p_min'].max(dim="focal_point_index", keep_attrs=True)
             ppp_aggregated = solution.simulation_result['p_max'].max(dim="focal_point_index", keep_attrs=True)
             # TODO: Ensure this mean is weighted by the number of times each point is focused on, once openlifu supports hitting points different numbers of times
-            intensity_aggregated = solution.simulation_result['intensity'].mean(dim="focal_point_index", keep_attrs=True)
+            intensity_aggregated = solution.get_ita(solution.simulation_result['intensity'])
             simulation_result_aggregated = deepcopy(solution.simulation_result)
             simulation_result_aggregated = simulation_result_aggregated.drop_dims("focal_point_index")
             simulation_result_aggregated['p_min'] = pnp_aggregated

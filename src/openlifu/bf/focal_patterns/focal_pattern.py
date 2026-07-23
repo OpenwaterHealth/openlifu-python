@@ -60,6 +60,15 @@ class FocalPattern(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_order(self):
+        """
+        Get the order of foci in the focal pattern
+
+        :returns: List of indices of foci in the order they are used in the pulse sequence
+        """
+        pass
+
     def to_dict(self):
         """
         Convert the focal pattern to a dictionary

@@ -32,6 +32,14 @@ class SinglePoint(FocalPattern):
         """
         return 1
 
+    def get_order(self):
+        """
+        Get the order of foci in the focal pattern
+
+        :returns: List of indices of foci in the order they are used in the pulse sequence
+        """
+        return [1]
+
     def to_table(self) -> pd.DataFrame:
         """
         Get a table of the focal pattern parameters

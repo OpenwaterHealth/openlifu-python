@@ -51,6 +51,9 @@ class Wheel(FocalPattern):
     )] = "mm"
     """Units of the wheel pattern parameters"""
 
+    order: Annotated[list[int] | None, OpenLIFUFieldData("Focus order", "Order of Foci (1-indexed) in the sequence")] = None
+    """Order of Foci (1-indexed) in the sequence. This is a list of integers that specifies the order in which the foci are used in the pulse sequence. If None, the foci are used in the order they are listed in the `foci` attribute."""
+
     def __post_init__(self):
         if not isinstance(self.center, bool):
             raise TypeError(f"Center must be a boolean, got {type(self.center).__name__}.")
@@ -127,7 +130,21 @@ class Wheel(FocalPattern):
 
         :returns: Number of foci
         """
-        return int(self.center) + self.num_spokes
+        if isinstance(self.num_spokes, int):
+            return int(self.center) + self.num_spokes
+        else:
+            return int(self.center) + sum(self.num_spokes)
+
+    def get_order(self):
+        """
+        Get the order of foci in the focal pattern
+
+        :returns: List of indices of foci in the order they are used in the pulse sequence
+        """
+        if self.order is not None:
+            return self.order
+        else:
+            return list(range(1, self.num_foci() + 1))
 
     def to_table(self) -> pd.DataFrame:
         """
