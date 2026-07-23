@@ -85,6 +85,9 @@ class Solution:
     what determines how many times each point will be used.
     """
 
+    order: Annotated[list[int] | None, OpenLIFUFieldData("Focus order", "Order of Foci (1-indexed) in the sequence")] = None
+    """Order of Foci (1-indexed) in the sequence. This is a list of integers that specifies the order in which the foci are used in the pulse sequence. If None, the foci are used in the order they are listed in the `foci` attribute."""
+
     # there was "target_id" in the matlab software, but here we do not have the concept of a target ID.
     # I believe this was only needed in the matlab software because solutions were organized by target rather
     # than having their own unique solution ID. We do have unique solution IDs so it's possible we don't need
@@ -345,7 +348,7 @@ class Solution:
             power_W[focus_index] = np.mean(np.sum(i0ta_Wcm2 * ele_sizes_cm2 * self.apodizations[focus_index, :]))
             TIC[focus_index] = power_W[focus_index] / (d_eq_cm * c_tic)
             solution_analysis.p0_MPa += [1e-6*np.max(p0_Pa)]
-        solution_analysis.global_ispta_mWcm2 = float((ita_mWcm2*z_mask).max())
+        solution_analysis.global_ispta_mWcm2 = float(ita_mWcm2.where(z_mask).max())
         solution_analysis.MI = (np.max(solution_analysis.mainlobe_pnp_MPa)/np.sqrt(self.pulse.frequency*1e-6))
         solution_analysis.TIC = np.mean(TIC)
         solution_analysis.voltage_V = self.voltage
@@ -491,14 +494,13 @@ class Solution:
             intensity_scaled = rescale_data_arr(self.simulation_result['intensity'], units)
         sequence_dutycycle = self.get_sequence_dutycycle()
         pulse_seq = (np.arange(self.sequence.pulse_count) - 1) % self.num_foci() + 1
-        counts = np.zeros((1, 1, 1, self.num_foci()))
-        for i in range(self.num_foci()):
-            counts[0, 0, 0, i] = np.sum(pulse_seq == (i+1))
-        intensity = intensity_scaled.copy(deep=True)
-        isppa_avg = np.sum(np.expand_dims(intensity.data, axis=-1) * counts, axis=-1) / np.sum(counts)
-        intensity.data = isppa_avg * sequence_dutycycle
-
-        return intensity
+        if self.order is not None:
+            pulse_seq = np.array(list(self.order)*(self.sequence.pulse_count//len(self.order)))
+        else:
+            pulse_seq = np.arange(self.sequence.pulse_count) % self.num_foci() + 1
+        counts = [np.sum(pulse_seq == (i+1)) for i in range(self.num_foci())]
+        counts_da = xa.DataArray(counts, dims=['focal_point_index'], coords={'focal_point_index': np.arange(self.num_foci())})
+        return ((intensity_scaled * counts_da).sum(dim='focal_point_index') / counts_da.sum(dim='focal_point_index')) * sequence_dutycycle
 
     def to_dict(self, include_simulation_data: bool = False) -> dict:
         """Serialize a Solution to a dictionary

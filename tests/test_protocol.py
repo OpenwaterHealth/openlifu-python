@@ -107,3 +107,65 @@ def test_fix_pulse_mismatch(
             assert example_protocol.sequence.pulse_count == 2*num_foci
         elif on_pulse_mismatch is OnPulseMismatchAction.ROUNDDOWN:
             assert example_protocol.sequence.pulse_count == num_foci
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},  # defaults
+        {"num_spokes": 6, "spoke_radius": 2.0, "spoke_phase": 15.0},  # scalar inputs
+        {"center": False, "num_spokes": 4, "spoke_radius": 1.5},  # center disabled
+        {"num_spokes": [4, 6], "spoke_radius": [1.0, 2.0]},  # matching lists, scalar phase broadcast
+        {"num_spokes": [4, 6], "spoke_radius": [1.0, 2.0], "spoke_phase": [0.0, 30.0]},  # all lists matching
+        {"num_spokes": 4, "spoke_radius": [1.0, 2.0]},  # scalar num_spokes, list radius (broadcast)
+        {"num_spokes": 4, "spoke_radius": [1.0, 2.0], "spoke_phase": [0.0, 30.0]},  # scalar num_spokes, list radius+phase
+    ],
+)
+def test_wheel_valid_inputs(kwargs: dict):
+    """Wheel should accept valid scalar and list inputs without raising."""
+    Wheel(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "exc_type", "match"),
+    [
+        # center must be a bool
+        ({"center": "yes"}, TypeError, "Center must be a boolean"),
+        ({"center": 1}, TypeError, "Center must be a boolean"),
+        # num_spokes scalar validity
+        ({"num_spokes": 0}, ValueError, "positive integer"),
+        ({"num_spokes": -3}, ValueError, "positive integer"),
+        # num_spokes list validity
+        ({"num_spokes": [4, 0, 6]}, ValueError, "All elements of num_spokes"),
+        ({"num_spokes": [4, -1]}, ValueError, "All elements of num_spokes"),
+        ({"num_spokes": [4, 2.5]}, ValueError, "All elements of num_spokes"),
+        # num_spokes wrong type
+        ({"num_spokes": "4"}, TypeError, "num_spokes must be an int or list of ints"),
+        ({"num_spokes": None}, TypeError, "num_spokes must be an int or list of ints"),
+        # spoke_radius scalar validity
+        ({"spoke_radius": 0.0}, ValueError, "positive number"),
+        ({"spoke_radius": -1.5}, ValueError, "positive number"),
+        # spoke_radius list validity
+        ({"spoke_radius": [1.0, -1.0]}, ValueError, "All elements of spoke_radius"),
+        ({"spoke_radius": [1.0, 0.0]}, ValueError, "All elements of spoke_radius"),
+        ({"spoke_radius": [1.0, "bad"]}, ValueError, "All elements of spoke_radius"),
+        # spoke_radius wrong type
+        ({"spoke_radius": "1.0"}, TypeError, "spoke_radius must be a number or list of numbers"),
+        ({"spoke_radius": None}, TypeError, "spoke_radius must be a number or list of numbers"),
+        # length mismatches between list inputs
+        (
+            {"spoke_radius": [1.0, 2.0], "spoke_phase": [0.0, 30.0, 60.0]},
+            ValueError,
+            "Length of spoke_phase list must match length of spoke_radius list",
+        ),
+        (
+            {"num_spokes": [4, 6, 8], "spoke_radius": [1.0, 2.0]},
+            ValueError,
+            "Length of spoke_radius list must match length of num_spokes list",
+        ),
+    ],
+)
+def test_wheel_invalid_inputs(kwargs: dict, exc_type: type[Exception], match: str):
+    """Wheel should reject invalid scalar and list inputs with the expected error."""
+    with pytest.raises(exc_type, match=match):
+        Wheel(**kwargs)

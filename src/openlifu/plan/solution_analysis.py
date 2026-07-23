@@ -21,7 +21,7 @@ DEFAULT_ORIGIN = np.zeros(3)
 PARAM_FORMATS = {
     "mainlobe_pnp_MPa": ["max", "0.3f", "MPa", "Mainlobe Peak Negative Pressure"],
     "mainlobe_isppa_Wcm2": ["max", "0.1f", "W/cm^2", "Mainlobe I_SPPA"],
-    "mainlobe_ispta_mWcm2": ["mean", "0.1f", "mW/cm^2", "Mainlobe I_SPTA"],
+    "mainlobe_ispta_mWcm2": ["max", "0.1f", "mW/cm^2", "Mainlobe I_SPTA"],
     "target_position_lat_mm": ["mean", "0.1f", "mm", "Target Position (Lateral)"],
     "target_position_ele_mm": ["mean", "0.1f", "mm", "Target Position (Elevation)"],
     "target_position_ax_mm": ["mean", "0.1f", "mm", "Target Position (Axial)"],
