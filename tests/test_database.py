@@ -15,7 +15,7 @@ from vtk import vtkImageData, vtkPolyData
 
 from openlifu.db import Session, Subject, User
 from openlifu.db.database import Database, OnConflictOpts
-from openlifu.db.session import TransducerTrackingResult
+from openlifu.db.session import SolutionInfo, TransducerTrackingResult
 from openlifu.geo.point import Point
 from openlifu.geo.transforms import ArrayTransform
 from openlifu.nav.photoscan import Photoscan
@@ -643,6 +643,42 @@ def test_session_solution_id_round_trips(example_database:Database, example_subj
     session.solution_id = "some_solution"
     example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
     assert example_database.load_session(example_subject, session.id).solution_id == "some_solution"
+
+def test_session_solutions_field_round_trips(example_database: Database, example_subject: Subject):
+    """A Session's ``solutions`` list of :class:`SolutionInfo` records round-trips through the database."""
+    session = Session(name="bleh", id='solutions_field_session', subject_id=example_subject.id)
+    assert session.solutions == []
+
+    session.solutions = [
+        SolutionInfo(
+            solution_id="sol_a",
+            protocol_id="proto_a",
+            target_id="tgt_a",
+            transducer_id="xdc_a",
+            transducer_transform_source="virtual_fit",
+        ),
+        SolutionInfo(
+            solution_id="sol_b",
+            protocol_id="proto_b",
+            target_id="tgt_b",
+            transducer_id="xdc_b",
+            transducer_transform_source="localization",
+        ),
+    ]
+    example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
+    reloaded = example_database.load_session(example_subject, session.id)
+    assert reloaded.solutions == session.solutions
+
+def test_solution_info_rejects_unknown_transform_source():
+    """SolutionInfo restricts ``transducer_transform_source`` to virtual_fit or localization."""
+    with pytest.raises(ValueError, match="transducer_transform_source"):
+        SolutionInfo(
+            solution_id="sol",
+            protocol_id="proto",
+            target_id="tgt",
+            transducer_id="xdc",
+            transducer_transform_source="manual",
+        )
 
 def test_write_load_solution_analysis(example_database:Database, example_subject:Subject):
     """SolutionAnalysis can be written next to its parent solution and reloaded faithfully."""

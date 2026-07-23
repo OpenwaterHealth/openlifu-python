@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Dict, List, Tuple
+from typing import Annotated, ClassVar, Dict, FrozenSet, List, Tuple
 
 import numpy as np
 
@@ -69,6 +69,51 @@ class TransducerTrackingResult:
 
     target_id: Annotated[str | None, OpenLIFUFieldData("Target ID", "ID of the openlifu Point target this tracking result was computed for, if any.")] = None
     """ID of the openlifu Point target this tracking result was computed for, if any."""
+
+@dataclass
+class SolutionInfo:
+    """Per-solution provenance record stored on a :class:`Session`.
+
+    A ``Solution`` on disk is a compact, hardware-ready object with no intrinsic knowledge of which
+    target, transducer pose, or protocol produced it. ``SolutionInfo`` carries that provenance at the
+    session level so consumers can link a loaded ``Solution`` back to its context and so the session
+    can cascade-delete solutions when the referenced target / virtual-fit / tracking result is removed.
+
+    Solutions on disk that have no matching ``SolutionInfo`` entry in the owning session are
+    considered orphaned: they are not loaded, and they are purged from the ``solutions/`` directory
+    on session save.
+    """
+
+    VALID_TRANSDUCER_TRANSFORM_SOURCES: ClassVar[FrozenSet[str]] = frozenset({"virtual_fit", "localization"})
+    """Allowed values for :attr:`transducer_transform_source`."""
+
+    solution_id: Annotated[str, OpenLIFUFieldData("Solution ID", "ID of the openlifu Solution this record describes. Corresponds to a Solution stored under the session's ``solutions/`` directory in the database.")]
+    """ID of the openlifu Solution this record describes."""
+
+    protocol_id: Annotated[str, OpenLIFUFieldData("Protocol ID", "ID of the protocol that produced this solution.")]
+    """ID of the protocol that produced this solution."""
+
+    target_id: Annotated[str, OpenLIFUFieldData("Target ID", "ID of the openlifu Point target this solution was computed for. Must match an entry in the session's ``targets`` list.")]
+    """ID of the openlifu Point target this solution was computed for."""
+
+    transducer_id: Annotated[str, OpenLIFUFieldData("Transducer ID", "ID of the transducer this solution was computed for.")]
+    """ID of the transducer this solution was computed for."""
+
+    transducer_transform_source: Annotated[str, OpenLIFUFieldData("Transducer transform source", "Provenance of the transducer pose used to compute this solution. One of 'virtual_fit' or 'localization'.")]
+    """Provenance of the transducer pose used to compute this solution.
+
+    Must be one of :attr:`VALID_TRANSDUCER_TRANSFORM_SOURCES` (``'virtual_fit'`` or
+    ``'localization'``). Additional identifying fields (e.g. virtual-fit rank or
+    transducer-tracking-result id) may be added later so consumers can pin down exactly which
+    virtual-fit or tracking transform was used.
+    """
+
+    def __post_init__(self):
+        if self.transducer_transform_source not in self.VALID_TRANSDUCER_TRANSFORM_SOURCES:
+            raise ValueError(
+                f"transducer_transform_source must be one of {sorted(self.VALID_TRANSDUCER_TRANSFORM_SOURCES)}, "
+                f"got {self.transducer_transform_source!r}"
+            )
 
 @dataclass
 class Session:
@@ -152,6 +197,16 @@ class Session:
     photoscan_registrations: Annotated[List[PhotoscanRegistration], OpenLIFUFieldData("Photoscan registrations", "List of photoscan-to-volume registrations stored on this session.")] = field(default_factory=list)
     """List of photoscan-to-volume registrations stored on this session. Each transducer tracking
     result references one of these registrations by ``photoscan_registration_id``."""
+
+    solutions: Annotated[List[SolutionInfo], OpenLIFUFieldData("Solutions", "Per-solution provenance records: one entry per Solution belonging to this session, carrying the target id, transducer id, protocol id, and transducer-transform source ('virtual_fit' or 'localization'). Solutions on disk that have no matching entry here are considered orphaned and are purged on save.")] = field(default_factory=list)
+    """Per-solution provenance records. See :class:`SolutionInfo`.
+
+    Every :class:`~openlifu.plan.Solution` that belongs to this session should have an entry here.
+    On-disk solutions without a matching entry are orphaned and are purged on save. Consumers use
+    this list to link a loaded ``Solution`` back to its target / transducer / protocol / pose
+    provenance and to cascade-delete solutions when a referenced target, virtual fit, or tracking
+    result is removed.
+    """
 
     def __post_init__(self):
         if self.id is None and self.name is None:
@@ -271,6 +326,8 @@ class Session:
             d['markers'] = [Point.from_dict(d['markers'])]
         elif isinstance(d['markers'], Point):
             d['markers'] = [d['markers']]
+        if 'solutions' in d:
+            d['solutions'] = [SolutionInfo(**s) for s in d['solutions']]
         return Session(**d)
 
     def to_dict(self):
@@ -293,6 +350,7 @@ class Session:
 
         d['transducer_tracking_results'] = [asdict(t) for t in d['transducer_tracking_results']]
         d['photoscan_registrations'] = [asdict(r) for r in d['photoscan_registrations']]
+        d['solutions'] = [asdict(s) for s in d['solutions']]
 
         return d
 
