@@ -680,6 +680,54 @@ def test_solution_info_rejects_unknown_transform_source():
             transducer_transform_source="manual",
         )
 
+def test_solution_info_approved_and_computed_at_round_trip(example_database: Database, example_subject: Subject):
+    """SolutionInfo.approved and SolutionInfo.computed_at round-trip through the database."""
+    from datetime import datetime
+    session = Session(name="bleh", id='solutions_extra_fields_session', subject_id=example_subject.id)
+    fixed_time = datetime(2026, 7, 24, 12, 34, 56)
+    session.solutions = [
+        SolutionInfo(
+            solution_id="sol_a",
+            protocol_id="proto_a",
+            target_id="tgt_a",
+            transducer_id="xdc_a",
+            transducer_transform_source="virtual_fit",
+            approved=True,
+            computed_at=fixed_time,
+        ),
+    ]
+    example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
+    reloaded = example_database.load_session(example_subject, session.id)
+    assert reloaded.solutions[0].approved is True
+    assert reloaded.solutions[0].computed_at == fixed_time
+    # Equality includes the new fields.
+    assert reloaded.solutions == session.solutions
+
+def test_solution_info_defaults_for_new_fields():
+    """New SolutionInfo has approved=False and computed_at=None by default (legacy-friendly)."""
+    si = SolutionInfo(
+        solution_id="sol",
+        protocol_id="proto",
+        target_id="tgt",
+        transducer_id="xdc",
+        transducer_transform_source="virtual_fit",
+    )
+    assert si.approved is False
+    assert si.computed_at is None
+
+def test_solution_info_accepts_iso_string_for_computed_at():
+    """Passing computed_at as an ISO string (as in Session.from_dict) is transparently parsed."""
+    from datetime import datetime
+    si = SolutionInfo(
+        solution_id="sol",
+        protocol_id="proto",
+        target_id="tgt",
+        transducer_id="xdc",
+        transducer_transform_source="virtual_fit",
+        computed_at="2026-07-24T12:34:56",
+    )
+    assert si.computed_at == datetime(2026, 7, 24, 12, 34, 56)
+
 def test_write_load_solution_analysis(example_database:Database, example_subject:Subject):
     """SolutionAnalysis can be written next to its parent solution and reloaded faithfully."""
     session = Session(name="bleh", id='analysis_session', subject_id=example_subject.id)

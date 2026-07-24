@@ -108,12 +108,23 @@ class SolutionInfo:
     virtual-fit or tracking transform was used.
     """
 
+    approved: Annotated[bool, OpenLIFUFieldData("Approved", "Whether the user has approved this solution for sonication. This approval axis is separate from any approval on the underlying Solution object and is tracked at the session-provenance layer.")] = False
+    """Whether the user has approved this solution for sonication."""
+
+    computed_at: Annotated[datetime | None, OpenLIFUFieldData("Computed at", "Timestamp at which the Solution was first computed. Serialized as ISO 8601. Left as None for legacy entries that predate this field.")] = None
+    """Timestamp at which the Solution was first computed. ``None`` for legacy entries that predate the field."""
+
     def __post_init__(self):
         if self.transducer_transform_source not in self.VALID_TRANSDUCER_TRANSFORM_SOURCES:
             raise ValueError(
                 f"transducer_transform_source must be one of {sorted(self.VALID_TRANSDUCER_TRANSFORM_SOURCES)}, "
                 f"got {self.transducer_transform_source!r}"
             )
+        # Accept ISO-8601 strings for ``computed_at`` transparently so callers (like
+        # :meth:`Session.from_dict`) that don't pre-parse the timestamp still get a
+        # ``datetime`` on the resulting instance.
+        if isinstance(self.computed_at, str):
+            self.computed_at = datetime.fromisoformat(self.computed_at)
 
 @dataclass
 class Session:
