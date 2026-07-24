@@ -359,7 +359,6 @@ class Protocol:
             foci=foci,
             target=target,
             simulation_result=xa.Dataset(),
-            approved=False,
             description= (
                 f"A solution computed for the {self.name} protocol with transducer {transducer.name}"
                 f" for target {target.id}."

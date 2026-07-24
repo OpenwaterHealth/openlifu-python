@@ -108,7 +108,7 @@ class SolutionInfo:
     virtual-fit or tracking transform was used.
     """
 
-    approved: Annotated[bool, OpenLIFUFieldData("Approved", "Whether the user has approved this solution for sonication. This approval axis is separate from any approval on the underlying Solution object and is tracked at the session-provenance layer.")] = False
+    approved: Annotated[bool, OpenLIFUFieldData("Approved", "Whether the user has approved this solution for sonication. Approval is tracked at the session-provenance layer because generating a Solution via Python has no approval concept; approval is a user-session-time decision.")] = False
     """Whether the user has approved this solution for sonication."""
 
     computed_at: Annotated[datetime | None, OpenLIFUFieldData("Computed at", "Timestamp at which the Solution was first computed. Serialized as ISO 8601. Left as None for legacy entries that predate this field.")] = None

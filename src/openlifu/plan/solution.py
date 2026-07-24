@@ -98,10 +98,6 @@ class Solution:
     simulation_result: Annotated[xa.Dataset, OpenLIFUFieldData("Simulation result", "The xarray Dataset of simulation results")] = field(default_factory=xa.Dataset)
     """The xarray Dataset of simulation results"""
 
-    approved: Annotated[bool, OpenLIFUFieldData("Approved?", "Approval state of this solution as a sonication plan. `True` means the user has provided some kind of confirmation that the solution is safe and acceptable to be executed.")] = False
-    """Approval state of this solution as a sonication plan. `True` means the user has provided some
-    kind of confirmation that the solution is safe and acceptable to be executed."""
-
     def __post_init__(self):
         self.logger = logging.getLogger(__name__)
         if self.delays is not None:
@@ -648,6 +644,11 @@ class Solution:
                 ),
                 engine='scipy',
             )
+
+        # Backward-compat: pre-migration Solution JSONs carried an ``approved`` field.
+        # Approval has moved to the Session's ``SolutionInfo`` records, so drop any
+        # legacy ``approved`` key here silently to keep old files loadable.
+        solution_dict.pop("approved", None)
 
         return Solution(**solution_dict)
 
