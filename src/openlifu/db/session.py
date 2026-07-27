@@ -103,9 +103,22 @@ class SolutionInfo:
     """Provenance of the transducer pose used to compute this solution.
 
     Must be one of :attr:`VALID_TRANSDUCER_TRANSFORM_SOURCES` (``'virtual_fit'`` or
-    ``'localization'``). Additional identifying fields (e.g. virtual-fit rank or
-    transducer-tracking-result id) may be added later so consumers can pin down exactly which
-    virtual-fit or tracking transform was used.
+    ``'localization'``). See :attr:`transducer_transform_source_id` for the specific
+    virtual-fit / tracking-result identifier.
+    """
+
+    transducer_transform_source_id: Annotated[str | None, OpenLIFUFieldData("Transducer transform source ID", "Opaque identifier of the specific virtual-fit or transducer-tracking result the transducer pose came from at compute time. Interpretation is source-dependent; SlicerOpenLIFU uses '<target_id>:<rank>' for VF and the TransducerTrackingResult.id for TT. Downstream consumers use this to determine whether the solution's source is still 'live' (present + approved), 'revoked' (present but no longer approved), or 'missing' (removed from the session).")] = None
+    """Opaque identifier of the specific virtual-fit or transducer-tracking result the
+    transducer pose came from at compute time.
+
+    Interpretation is source-dependent -- see the ``transducer_transform_source`` field for
+    the kind. SlicerOpenLIFU uses ``"<target_id>:<rank>"`` for VF (composite key that stays
+    stable across approval-only changes) and the :class:`TransducerTrackingResult.id` for TT.
+    Downstream consumers can use this to determine whether the solution's source is still
+    live (present + approved), revoked (present but no longer approved), or missing (removed
+    from the session), and to warn / block sending an out-of-date solution to hardware.
+    ``None`` for legacy entries that predate this field; consumers should degrade gracefully
+    (e.g. treat as "legacy" status rather than "missing").
     """
 
     approved: Annotated[bool, OpenLIFUFieldData("Approved", "Whether the user has approved this solution for sonication. Approval is tracked at the session-provenance layer because generating a Solution via Python has no approval concept; approval is a user-session-time decision.")] = False

@@ -786,6 +786,48 @@ def test_solution_info_array_transform_round_trips(example_database: Database, e
                        "transducer_transform_source", "approved", "computed_at"):
         assert getattr(reloaded.solutions[0], field_name) == getattr(session.solutions[0], field_name)
 
+
+def test_solution_info_source_id_defaults_to_none():
+    """The new ``transducer_transform_source_id`` field is optional and defaults to None
+    (legacy compat)."""
+    si = SolutionInfo(
+        solution_id="sol",
+        protocol_id="proto",
+        target_id="tgt",
+        transducer_id="xdc",
+        transducer_transform_source="virtual_fit",
+    )
+    assert si.transducer_transform_source_id is None
+
+
+def test_solution_info_source_id_round_trips(example_database: Database, example_subject: Subject):
+    """A SolutionInfo carrying a ``transducer_transform_source_id`` round-trips through the database."""
+    session = Session(name="bleh", id='solutions_source_id_session', subject_id=example_subject.id)
+    session.solutions = [
+        SolutionInfo(
+            solution_id="sol_vf",
+            protocol_id="proto",
+            target_id="tgt_a",
+            transducer_id="xdc",
+            transducer_transform_source="virtual_fit",
+            transducer_transform_source_id="tgt_a:0",  # VF composite key: <target_id>:<rank>
+        ),
+        SolutionInfo(
+            solution_id="sol_tt",
+            protocol_id="proto",
+            target_id="tgt_b",
+            transducer_id="xdc",
+            transducer_transform_source="localization",
+            transducer_transform_source_id="tt_result_12345",  # TT stable id
+        ),
+    ]
+    example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
+    reloaded = example_database.load_session(example_subject, session.id)
+    assert reloaded.solutions[0].transducer_transform_source_id == "tgt_a:0"
+    assert reloaded.solutions[1].transducer_transform_source_id == "tt_result_12345"
+    # Legacy sessions saved without the field round-trip as None:
+    assert reloaded.solutions == session.solutions
+
 def test_write_load_solution_analysis(example_database:Database, example_subject:Subject):
     """SolutionAnalysis can be written next to its parent solution and reloaded faithfully."""
     session = Session(name="bleh", id='analysis_session', subject_id=example_subject.id)
