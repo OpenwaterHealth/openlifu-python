@@ -114,6 +114,18 @@ class SolutionInfo:
     computed_at: Annotated[datetime | None, OpenLIFUFieldData("Computed at", "Timestamp at which the Solution was first computed. Serialized as ISO 8601. Left as None for legacy entries that predate this field.")] = None
     """Timestamp at which the Solution was first computed. ``None`` for legacy entries that predate the field."""
 
+    array_transform: Annotated[ArrayTransform | None, OpenLIFUFieldData("Array transform", "The transducer array-to-volume transform matrix (with units) that was used when this solution was computed. Downstream consumers should reproduce this exact pose when displaying the solution so the peak-negative-pressure volume renders where it was computed, independent of subsequent virtual-fit / transducer-tracking approval changes. Left as None for legacy entries that predate this field.")] = None
+    """Transducer array-to-volume transform that was used when this solution was computed.
+
+    The Solution's PNP / intensity volumes are stored in transducer-local coordinates; their world
+    position is ``array_transform.matrix @ local_coords``. Showing a solution should snap the
+    transducer to *this* matrix rather than to the currently-approved virtual-fit / transducer-tracking
+    result, because the currently-approved result may have changed since the solution was computed
+    (or, in the case of a pre-solution computed off a virtual-fit result whose approval was later
+    revoked, may no longer be available at all). ``None`` for legacy entries that predate this field;
+    consumers should fall back to their previous "snap to best current approved" behavior in that case.
+    """
+
     def __post_init__(self):
         if self.transducer_transform_source not in self.VALID_TRANSDUCER_TRANSFORM_SOURCES:
             raise ValueError(
@@ -125,6 +137,11 @@ class SolutionInfo:
         # ``datetime`` on the resulting instance.
         if isinstance(self.computed_at, str):
             self.computed_at = datetime.fromisoformat(self.computed_at)
+        # Accept dict for ``array_transform`` transparently so callers that don't pre-parse
+        # (like :meth:`Session.from_dict` decoding ``solutions`` entries) still get an
+        # ``ArrayTransform`` on the resulting instance.
+        if isinstance(self.array_transform, dict):
+            self.array_transform = ArrayTransform.from_dict(self.array_transform)
 
 @dataclass
 class Session:

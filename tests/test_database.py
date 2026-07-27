@@ -728,6 +728,64 @@ def test_solution_info_accepts_iso_string_for_computed_at():
     )
     assert si.computed_at == datetime(2026, 7, 24, 12, 34, 56)
 
+
+def test_solution_info_array_transform_defaults_to_none():
+    """The new ``array_transform`` field is optional and defaults to None for legacy sessions."""
+    si = SolutionInfo(
+        solution_id="sol",
+        protocol_id="proto",
+        target_id="tgt",
+        transducer_id="xdc",
+        transducer_transform_source="virtual_fit",
+    )
+    assert si.array_transform is None
+
+
+def test_solution_info_accepts_dict_for_array_transform():
+    """Passing ``array_transform`` as a dict (as in Session.from_dict) is transparently parsed."""
+    from openlifu.geo.transforms import ArrayTransform
+    matrix = np.eye(4)
+    matrix[0, 3] = 5.0  # arbitrary non-identity value so a round-trip is distinguishable from default
+    si = SolutionInfo(
+        solution_id="sol",
+        protocol_id="proto",
+        target_id="tgt",
+        transducer_id="xdc",
+        transducer_transform_source="virtual_fit",
+        array_transform={"matrix": matrix.tolist(), "units": "mm"},
+    )
+    assert isinstance(si.array_transform, ArrayTransform)
+    assert si.array_transform.units == "mm"
+    np.testing.assert_array_equal(si.array_transform.matrix, matrix)
+
+
+def test_solution_info_array_transform_round_trips(example_database: Database, example_subject: Subject):
+    """A SolutionInfo carrying an ``array_transform`` round-trips through the database."""
+    from openlifu.geo.transforms import ArrayTransform
+    session = Session(name="bleh", id='solutions_array_transform_session', subject_id=example_subject.id)
+    matrix = np.eye(4)
+    matrix[:3, 3] = [1.0, 2.0, 3.0]  # translation-only, easy to eyeball
+    session.solutions = [
+        SolutionInfo(
+            solution_id="sol_a",
+            protocol_id="proto_a",
+            target_id="tgt_a",
+            transducer_id="xdc_a",
+            transducer_transform_source="virtual_fit",
+            array_transform=ArrayTransform(matrix=matrix, units="mm"),
+        ),
+    ]
+    example_database.write_session(example_subject, session, on_conflict=OnConflictOpts.OVERWRITE)
+    reloaded = example_database.load_session(example_subject, session.id)
+    assert reloaded.solutions[0].array_transform is not None
+    assert reloaded.solutions[0].array_transform.units == "mm"
+    np.testing.assert_array_equal(reloaded.solutions[0].array_transform.matrix, matrix)
+    # Compare the non-numpy fields directly; dataclass ``==`` would try to bool-collapse a
+    # numpy array from ``array_transform.matrix`` and raise ValueError.
+    for field_name in ("solution_id", "protocol_id", "target_id", "transducer_id",
+                       "transducer_transform_source", "approved", "computed_at"):
+        assert getattr(reloaded.solutions[0], field_name) == getattr(session.solutions[0], field_name)
+
 def test_write_load_solution_analysis(example_database:Database, example_subject:Subject):
     """SolutionAnalysis can be written next to its parent solution and reloaded faithfully."""
     session = Session(name="bleh", id='analysis_session', subject_id=example_subject.id)
