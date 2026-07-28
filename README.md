@@ -10,9 +10,32 @@
 
 <!-- SPHINX-START -->
 
-`openlifu` is a toolbox for planning and controlling focused ultrasound
-treatments. It generally replicates the functionality developed in the MATLAB
-[open-TFUS toolbox](https://github.com/OpenwaterHealth/opw_neuromod_sw).
+The `openlifu` repository contains the core Python library for Open-LIFU.
+
+It provides the software components used to build focused ultrasound research
+applications, including treatment planning, simulation, hardware communication,
+data models, and supporting utilities.
+
+If you're looking to develop with the `openlifu` Python package, contribute to
+the codebase, or build research workflows using the library, you're in the
+right place.
+
+## What you'll find here
+
+- The core `openlifu` Python package
+- APIs for treatment planning, simulation, and hardware communication
+- Developer documentation and examples
+- Installation instructions
+- Guidance for contributing to the project
+
+## Learn more
+
+- 📖 **Quickstart Guide** – <https://openwaterhealth.github.io/openwater-community/quickstart-open-lifu.html>
+- 📚 **API Documentation** – <https://openlifu.readthedocs.io/en/latest/>
+- 🌐 **Openwater Community Hub** – <https://openwaterhealth.github.io/openwater-community/>
+- 🚀 **Good First Issues** – <https://github.com/OpenwaterHealth/OpenLIFU-python/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22>
+
+---
 
 ## Installation
 
