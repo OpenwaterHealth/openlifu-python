@@ -20,7 +20,10 @@ from openlifu.util.volume_conversion import (
 from openlifu.xdc import Transducer, TransducerArray
 from openlifu.xdc.util import load_transducer_from_file
 
+from .plan import Plan
+from .planning_session import PlanningSession
 from .session import Session
+from .sonication_session import SonicationSession
 from .subject import Subject
 from .user import User
 
@@ -835,6 +838,483 @@ class Database:
             f"Removed solution {solution_id} at subject scope for subject {subject_id}."
         )
 
+    # ------------------------------------------------------------------
+    # Plan read/write/delete (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def write_plan(
+        self,
+        subject_id: str,
+        plan: Plan,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Write a Plan to the subject's ``plans/{plan_id}/`` directory."""
+        on_conflict = _normalize_on_conflict(on_conflict)
+        if plan.subject_id is not None and plan.subject_id != subject_id:
+            raise ValueError(
+                f"Plan.subject_id ({plan.subject_id!r}) does not match subject_id argument ({subject_id!r})."
+            )
+        plan_ids = self.get_plan_ids(subject_id)
+        if plan.id in plan_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Plan with ID {plan.id} already exists for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting plan {plan.id} for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping plan {plan.id} for subject {subject_id} as it already exists."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+
+        plan_filename = self.get_plan_filename(subject_id, plan.id)
+        plan_filename.parent.parent.mkdir(parents=True, exist_ok=True)
+        plan_filename.parent.mkdir(exist_ok=True)
+        plan.to_file(plan_filename)
+
+        if plan.id not in plan_ids:
+            plan_ids.append(plan.id)
+            self.write_plan_ids(subject_id, plan_ids)
+
+        self.logger.info(f"Wrote plan {plan.id} for subject {subject_id}.")
+
+    def load_plan(self, subject_id: str, plan_id: str) -> Plan:
+        """Load a Plan by id from the subject's ``plans/`` directory."""
+        plan_filename = self.get_plan_filename(subject_id, plan_id)
+        if not (plan_filename.exists() and plan_filename.is_file()):
+            self.logger.error(
+                f"Plan file not found for plan {plan_id}, subject {subject_id}"
+            )
+            raise FileNotFoundError(
+                f"Plan file not found for plan {plan_id}, subject {subject_id}"
+            )
+        plan = Plan.from_file(plan_filename)
+        self.logger.info(f"Loaded plan {plan_id} for subject {subject_id}.")
+        return plan
+
+    def delete_plan(
+        self,
+        subject_id: str,
+        plan_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a Plan and drop it from the subject's plans index.
+
+        Does NOT touch the pre-solutions the Plan references -- those live at subject
+        scope and may be referenced by the parent PlanningSession or another Plan.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        plan_ids = self.get_plan_ids(subject_id)
+        if plan_id not in plan_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Plan ID {plan_id} does not exist for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete plan {plan_id} as it does not exist for subject {subject_id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        plan_dir = self.get_plan_dir(subject_id, plan_id)
+        if plan_dir.is_dir():
+            shutil.rmtree(plan_dir)
+
+        plan_ids.remove(plan_id)
+        self.write_plan_ids(subject_id, plan_ids)
+
+        self.logger.info(f"Removed plan {plan_id} for subject {subject_id}.")
+
+    # ------------------------------------------------------------------
+    # PlanningSession read/write/delete (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def write_planning_session(
+        self,
+        subject_id: str,
+        planning_session: PlanningSession,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Write a PlanningSession to the subject's ``planning_sessions/`` directory."""
+        on_conflict = _normalize_on_conflict(on_conflict)
+        if planning_session.subject_id is not None and planning_session.subject_id != subject_id:
+            raise ValueError(
+                "PlanningSession.subject_id "
+                f"({planning_session.subject_id!r}) does not match subject_id argument ({subject_id!r})."
+            )
+        # Validate virtual-fit results reference targets on the session.
+        target_ids = {t.id for t in planning_session.targets}
+        for target_id, list_of_transforms in planning_session.virtual_fit_results.items():
+            if target_id not in target_ids:
+                raise ValueError(
+                    f"PlanningSession {planning_session.id} virtual_fit_results references target "
+                    f"{target_id} that is not in its targets list."
+                )
+            if len(list_of_transforms) < 1:
+                raise ValueError(
+                    f"PlanningSession {planning_session.id} virtual_fit_results provides no "
+                    f"transforms for target {target_id}."
+                )
+
+        ids = self.get_planning_session_ids(subject_id)
+        if planning_session.id in ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"PlanningSession with ID {planning_session.id} already exists for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting PlanningSession {planning_session.id} for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping PlanningSession {planning_session.id} for subject {subject_id} as it already exists."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+
+        filename = self.get_planning_session_filename(subject_id, planning_session.id)
+        filename.parent.parent.mkdir(parents=True, exist_ok=True)
+        filename.parent.mkdir(exist_ok=True)
+        planning_session.update_modified_time()
+        planning_session.to_file(filename)
+
+        if planning_session.id not in ids:
+            ids.append(planning_session.id)
+            self.write_planning_session_ids(subject_id, ids)
+
+        self.logger.info(
+            f"Wrote PlanningSession {planning_session.id} for subject {subject_id}."
+        )
+
+    def load_planning_session(self, subject_id: str, planning_session_id: str) -> PlanningSession:
+        """Load a PlanningSession by id from the subject's ``planning_sessions/`` directory."""
+        filename = self.get_planning_session_filename(subject_id, planning_session_id)
+        if not (filename.exists() and filename.is_file()):
+            self.logger.error(
+                f"PlanningSession file not found for planning session {planning_session_id}, subject {subject_id}"
+            )
+            raise FileNotFoundError(
+                f"PlanningSession file not found for planning session {planning_session_id}, subject {subject_id}"
+            )
+        ps = PlanningSession.from_file(filename)
+        self.logger.info(
+            f"Loaded PlanningSession {planning_session_id} for subject {subject_id}."
+        )
+        return ps
+
+    def delete_planning_session(
+        self,
+        subject_id: str,
+        planning_session_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a PlanningSession and drop it from the subject's planning-sessions index.
+
+        Does NOT touch pre-solutions on disk or any Plans that were finalized from this
+        PlanningSession. Those live at subject scope and are independent.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        ids = self.get_planning_session_ids(subject_id)
+        if planning_session_id not in ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"PlanningSession ID {planning_session_id} does not exist for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete PlanningSession {planning_session_id} as it does not exist for subject {subject_id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        session_dir = self.get_planning_session_dir(subject_id, planning_session_id)
+        if session_dir.is_dir():
+            shutil.rmtree(session_dir)
+
+        ids.remove(planning_session_id)
+        self.write_planning_session_ids(subject_id, ids)
+
+        self.logger.info(
+            f"Removed PlanningSession {planning_session_id} for subject {subject_id}."
+        )
+
+    # ------------------------------------------------------------------
+    # SonicationSession read/write/delete (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def write_sonication_session(
+        self,
+        subject_id: str,
+        sonication_session: SonicationSession,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Write a SonicationSession to the subject's ``sonication_sessions/`` directory."""
+        on_conflict = _normalize_on_conflict(on_conflict)
+        if sonication_session.subject_id is not None and sonication_session.subject_id != subject_id:
+            raise ValueError(
+                "SonicationSession.subject_id "
+                f"({sonication_session.subject_id!r}) does not match subject_id argument ({subject_id!r})."
+            )
+        ids = self.get_sonication_session_ids(subject_id)
+        if sonication_session.id in ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"SonicationSession with ID {sonication_session.id} already exists for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting SonicationSession {sonication_session.id} for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping SonicationSession {sonication_session.id} for subject {subject_id} as it already exists."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+
+        filename = self.get_sonication_session_filename(subject_id, sonication_session.id)
+        filename.parent.parent.mkdir(parents=True, exist_ok=True)
+        filename.parent.mkdir(exist_ok=True)
+        sonication_session.update_modified_time()
+        sonication_session.to_file(filename)
+
+        if sonication_session.id not in ids:
+            ids.append(sonication_session.id)
+            self.write_sonication_session_ids(subject_id, ids)
+
+        self.logger.info(
+            f"Wrote SonicationSession {sonication_session.id} for subject {subject_id}."
+        )
+
+    def load_sonication_session(self, subject_id: str, sonication_session_id: str) -> SonicationSession:
+        """Load a SonicationSession by id from the subject's ``sonication_sessions/`` directory."""
+        filename = self.get_sonication_session_filename(subject_id, sonication_session_id)
+        if not (filename.exists() and filename.is_file()):
+            self.logger.error(
+                f"SonicationSession file not found for sonication session {sonication_session_id}, subject {subject_id}"
+            )
+            raise FileNotFoundError(
+                f"SonicationSession file not found for sonication session {sonication_session_id}, subject {subject_id}"
+            )
+        ss = SonicationSession.from_file(filename)
+        self.logger.info(
+            f"Loaded SonicationSession {sonication_session_id} for subject {subject_id}."
+        )
+        return ss
+
+    def delete_sonication_session(
+        self,
+        subject_id: str,
+        sonication_session_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a SonicationSession and drop it from the subject's sonication-sessions index.
+
+        Does NOT delete the referenced Plan, subject-scoped photoscans, or subject-scoped
+        solutions -- those are independent artifacts.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        ids = self.get_sonication_session_ids(subject_id)
+        if sonication_session_id not in ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"SonicationSession ID {sonication_session_id} does not exist for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete SonicationSession {sonication_session_id} as it does not exist for subject {subject_id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        session_dir = self.get_sonication_session_dir(subject_id, sonication_session_id)
+        if session_dir.is_dir():
+            shutil.rmtree(session_dir)
+
+        ids.remove(sonication_session_id)
+        self.write_sonication_session_ids(subject_id, ids)
+
+        self.logger.info(
+            f"Removed SonicationSession {sonication_session_id} for subject {subject_id}."
+        )
+
+    # ------------------------------------------------------------------
+    # Subject-scoped Photoscan storage (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def write_photoscan_at_subject_scope(
+        self,
+        subject_id: str,
+        photoscan: Photoscan,
+        model_data_filepath: str | None = None,
+        texture_data_filepath: str | None = None,
+        mtl_data_filepath: str | None = None,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Write a Photoscan to ``subjects/{subject_id}/photoscans/{photoscan_id}/``.
+
+        Physical files live at subject scope; logical ownership is per-SonicationSession
+        (via ``SonicationSession.photoscan_ids``). The same photoscan is not duplicated
+        on disk when it's referenced by multiple sonication sessions.
+
+        The model data file is required on first write; on overwrite, the caller may
+        omit the data filepaths to keep the existing files in place. Texture and MTL
+        files are optional.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        photoscan_ids = self.get_subject_photoscan_ids(subject_id)
+        if photoscan.id in photoscan_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Photoscan with ID {photoscan.id} already exists at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting photoscan {photoscan.id} at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping photoscan {photoscan.id} at subject scope as it already exists."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+
+        photoscan_metadata_filepath = self.get_subject_photoscan_metadata_filepath(subject_id, photoscan.id)
+        photoscan_parent_dir = photoscan_metadata_filepath.parent
+        photoscan_parent_dir.mkdir(parents=True, exist_ok=True)
+
+        if model_data_filepath:
+            model_data_filepath = Path(model_data_filepath)
+            if not model_data_filepath.exists():
+                raise FileNotFoundError(f"Model data filepath does not exist: {model_data_filepath}")
+            photoscan.model_filename = model_data_filepath.name
+            shutil.copy(model_data_filepath, photoscan_parent_dir)
+        elif not photoscan.model_filename or not (photoscan_parent_dir / photoscan.model_filename).exists():
+            raise ValueError(f"Cannot find model file associated with photoscan {photoscan.id}.")
+
+        if texture_data_filepath:
+            texture_data_filepath = Path(texture_data_filepath)
+            if not texture_data_filepath.exists():
+                raise FileNotFoundError(f"Texture data filepath does not exist: {texture_data_filepath}")
+            photoscan.texture_filename = texture_data_filepath.name
+            shutil.copy(texture_data_filepath, photoscan_parent_dir)
+        elif photoscan.texture_filename and not (photoscan_parent_dir / photoscan.texture_filename).exists():
+            raise ValueError(f"Cannot find texture file associated with photoscan {photoscan.id}.")
+
+        if mtl_data_filepath:
+            mtl_data_filepath = Path(mtl_data_filepath)
+            if not mtl_data_filepath.exists():
+                raise FileNotFoundError(f"MTL filepath does not exist: {mtl_data_filepath}")
+            photoscan.mtl_filename = mtl_data_filepath.name
+            shutil.copy(mtl_data_filepath, photoscan_parent_dir)
+        elif photoscan.mtl_filename and not (photoscan_parent_dir / photoscan.mtl_filename).exists():
+            raise ValueError(f"Cannot find photoscan materials file associated with photoscan {photoscan.id}.")
+
+        photoscan.to_file(photoscan_metadata_filepath)
+
+        if photoscan.id not in photoscan_ids:
+            photoscan_ids.append(photoscan.id)
+            self.write_subject_photoscan_ids(subject_id, photoscan_ids)
+
+        self.logger.info(
+            f"Wrote photoscan {photoscan.id} at subject scope for subject {subject_id}."
+        )
+
+    def load_photoscan_at_subject_scope(
+        self,
+        subject_id: str,
+        photoscan_id: str,
+        load_data: bool = False,
+    ):
+        """Load a subject-scoped Photoscan and optionally its model + texture data.
+
+        Returns ``photoscan`` if ``load_data=False``, else
+        ``(photoscan, (model_data, texture_data))`` matching the legacy
+        ``load_photoscan`` shape.
+        """
+        photoscan_metadata_filepath = self.get_subject_photoscan_metadata_filepath(subject_id, photoscan_id)
+        if not (photoscan_metadata_filepath.exists() and photoscan_metadata_filepath.is_file()):
+            raise FileNotFoundError(
+                f"Photoscan file not found at subject scope for photoscan {photoscan_id}, subject {subject_id}"
+            )
+        photoscan = Photoscan.from_file(photoscan_metadata_filepath)
+        if load_data:
+            model_data, texture_data = load_data_from_photoscan(
+                photoscan, Path(photoscan_metadata_filepath.parent),
+            )
+            return photoscan, (model_data, texture_data)
+        return photoscan
+
+    def get_photoscan_absolute_filepaths_info_at_subject_scope(
+        self, subject_id: str, photoscan_id: str,
+    ) -> Dict:
+        """Return a dict of absolute file paths for the subject-scoped photoscan."""
+        photoscan_metadata_filepath = self.get_subject_photoscan_metadata_filepath(subject_id, photoscan_id)
+        photoscan_metadata_directory = Path(photoscan_metadata_filepath).parent
+        with open(photoscan_metadata_filepath) as f:
+            photoscan = json.load(f)
+            info = {
+                "id": photoscan["id"],
+                "name": photoscan["name"],
+                "model_abspath": photoscan_metadata_directory / photoscan["model_filename"],
+                "texture_abspath": photoscan_metadata_directory / photoscan["texture_filename"],
+                "photoscan_approved": photoscan["photoscan_approved"],
+            }
+            if "mtl_filename" in photoscan:
+                info["mtl_abspath"] = photoscan_metadata_directory / photoscan["mtl_filename"]
+        return info
+
+    def delete_photoscan_at_subject_scope(
+        self,
+        subject_id: str,
+        photoscan_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a subject-scoped Photoscan and drop it from the subject's photoscans index.
+
+        Does NOT scrub SonicationSessions that reference this photoscan. Cleaning up
+        dangling references is the caller's responsibility (a session-level compact
+        step, not a DB-level cascade).
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        photoscan_ids = self.get_subject_photoscan_ids(subject_id)
+        if photoscan_id not in photoscan_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Photoscan ID {photoscan_id} does not exist at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete photoscan {photoscan_id} at subject scope as it does not exist for subject {subject_id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        photoscan_dir = self.get_subject_photoscan_dir(subject_id, photoscan_id)
+        if photoscan_dir.is_dir():
+            shutil.rmtree(photoscan_dir)
+
+        photoscan_ids.remove(photoscan_id)
+        self.write_subject_photoscan_ids(subject_id, photoscan_ids)
+
+        self.logger.info(
+            f"Removed photoscan {photoscan_id} at subject scope for subject {subject_id}."
+        )
+
     def choose_session(self, subject, options=None):
         # Implement the logic to choose a session
         raise NotImplementedError("Method not yet implemented")
@@ -1424,6 +1904,58 @@ class Database:
     def get_photoscan_metadata_filepath(self, subject_id, session_id, photoscan_id):
         return Path(self.get_session_dir(subject_id, session_id)) / 'photoscans' / photoscan_id / f'{photoscan_id}.json'
 
+    # ------------------------------------------------------------------
+    # Split-session path helpers (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def get_plans_filename(self, subject_id: str) -> Path:
+        """Path to the subject-scoped plans index (``subjects/{sid}/plans/plans.json``)."""
+        return Path(self.get_subject_dir(subject_id)) / 'plans' / 'plans.json'
+
+    def get_plan_dir(self, subject_id: str, plan_id: str) -> Path:
+        """Directory holding a Plan's files."""
+        return Path(self.get_subject_dir(subject_id)) / 'plans' / plan_id
+
+    def get_plan_filename(self, subject_id: str, plan_id: str) -> Path:
+        """Path to a Plan's JSON file."""
+        return self.get_plan_dir(subject_id, plan_id) / f'{plan_id}.json'
+
+    def get_planning_sessions_filename(self, subject_id: str) -> Path:
+        """Path to the subject-scoped planning-sessions index."""
+        return Path(self.get_subject_dir(subject_id)) / 'planning_sessions' / 'planning_sessions.json'
+
+    def get_planning_session_dir(self, subject_id: str, planning_session_id: str) -> Path:
+        """Directory holding a PlanningSession's files."""
+        return Path(self.get_subject_dir(subject_id)) / 'planning_sessions' / planning_session_id
+
+    def get_planning_session_filename(self, subject_id: str, planning_session_id: str) -> Path:
+        """Path to a PlanningSession's JSON file."""
+        return self.get_planning_session_dir(subject_id, planning_session_id) / f'{planning_session_id}.json'
+
+    def get_sonication_sessions_filename(self, subject_id: str) -> Path:
+        """Path to the subject-scoped sonication-sessions index."""
+        return Path(self.get_subject_dir(subject_id)) / 'sonication_sessions' / 'sonication_sessions.json'
+
+    def get_sonication_session_dir(self, subject_id: str, sonication_session_id: str) -> Path:
+        """Directory holding a SonicationSession's files."""
+        return Path(self.get_subject_dir(subject_id)) / 'sonication_sessions' / sonication_session_id
+
+    def get_sonication_session_filename(self, subject_id: str, sonication_session_id: str) -> Path:
+        """Path to a SonicationSession's JSON file."""
+        return self.get_sonication_session_dir(subject_id, sonication_session_id) / f'{sonication_session_id}.json'
+
+    def get_subject_photoscans_filename(self, subject_id: str) -> Path:
+        """Path to the subject-scoped photoscans index."""
+        return Path(self.get_subject_dir(subject_id)) / 'photoscans' / 'photoscans.json'
+
+    def get_subject_photoscan_dir(self, subject_id: str, photoscan_id: str) -> Path:
+        """Directory holding a subject-scoped Photoscan's files."""
+        return Path(self.get_subject_dir(subject_id)) / 'photoscans' / photoscan_id
+
+    def get_subject_photoscan_metadata_filepath(self, subject_id: str, photoscan_id: str) -> Path:
+        """Path to a subject-scoped Photoscan's metadata JSON."""
+        return self.get_subject_photoscan_dir(subject_id, photoscan_id) / f'{photoscan_id}.json'
+
     def get_run_dir(self, subject_id, session_id, run_id):
         run_dir = self.get_session_dir(subject_id, session_id) / 'runs' / f'{run_id}'
         return run_dir
@@ -1502,6 +2034,70 @@ class Database:
         solutions_filepath = self.get_solutions_filename(session.subject_id, session.id)
         solutions_filepath.parent.mkdir(exist_ok=True) # Make solutions directory in case it does not exist
         solutions_filepath.write_text(json.dumps(solutions_data))
+
+    # ------------------------------------------------------------------
+    # Split-session id-index read/write helpers (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def get_plan_ids(self, subject_id: str) -> List[str]:
+        """List IDs of Plans stored under ``subjects/{sid}/plans/``."""
+        plans_filename = self.get_plans_filename(subject_id)
+        if not (plans_filename.exists() and plans_filename.is_file()):
+            self.logger.info("Plans file not found for subject %s.", subject_id)
+            return []
+        return json.loads(plans_filename.read_text()).get("plan_ids", [])
+
+    def write_plan_ids(self, subject_id: str, plan_ids: List[str]) -> None:
+        """Overwrite the subject-scoped plans index."""
+        plans_filename = self.get_plans_filename(subject_id)
+        plans_filename.parent.mkdir(parents=True, exist_ok=True)
+        plans_filename.write_text(json.dumps({"plan_ids": plan_ids}))
+
+    def get_planning_session_ids(self, subject_id: str) -> List[str]:
+        """List IDs of PlanningSessions stored under ``subjects/{sid}/planning_sessions/``."""
+        idx = self.get_planning_sessions_filename(subject_id)
+        if not (idx.exists() and idx.is_file()):
+            self.logger.info("Planning-sessions file not found for subject %s.", subject_id)
+            return []
+        return json.loads(idx.read_text()).get("planning_session_ids", [])
+
+    def write_planning_session_ids(self, subject_id: str, ids: List[str]) -> None:
+        """Overwrite the subject-scoped planning-sessions index."""
+        idx = self.get_planning_sessions_filename(subject_id)
+        idx.parent.mkdir(parents=True, exist_ok=True)
+        idx.write_text(json.dumps({"planning_session_ids": ids}))
+
+    def get_sonication_session_ids(self, subject_id: str) -> List[str]:
+        """List IDs of SonicationSessions stored under ``subjects/{sid}/sonication_sessions/``."""
+        idx = self.get_sonication_sessions_filename(subject_id)
+        if not (idx.exists() and idx.is_file()):
+            self.logger.info("Sonication-sessions file not found for subject %s.", subject_id)
+            return []
+        return json.loads(idx.read_text()).get("sonication_session_ids", [])
+
+    def write_sonication_session_ids(self, subject_id: str, ids: List[str]) -> None:
+        """Overwrite the subject-scoped sonication-sessions index."""
+        idx = self.get_sonication_sessions_filename(subject_id)
+        idx.parent.mkdir(parents=True, exist_ok=True)
+        idx.write_text(json.dumps({"sonication_session_ids": ids}))
+
+    def get_subject_photoscan_ids(self, subject_id: str) -> List[str]:
+        """List IDs of photoscans stored under ``subjects/{sid}/photoscans/``.
+
+        Independent of the legacy session-scoped ``get_photoscan_ids``. Returns ``[]``
+        when the subject has no subject-scoped photoscans index yet.
+        """
+        idx = self.get_subject_photoscans_filename(subject_id)
+        if not (idx.exists() and idx.is_file()):
+            self.logger.info("Subject-scoped photoscans file not found for subject %s.", subject_id)
+            return []
+        return json.loads(idx.read_text()).get("photoscan_ids", [])
+
+    def write_subject_photoscan_ids(self, subject_id: str, photoscan_ids: List[str]) -> None:
+        """Overwrite the subject-scoped photoscans index."""
+        idx = self.get_subject_photoscans_filename(subject_id)
+        idx.parent.mkdir(parents=True, exist_ok=True)
+        idx.write_text(json.dumps({"photoscan_ids": photoscan_ids}))
 
     @staticmethod
     def get_default_user_dir():
