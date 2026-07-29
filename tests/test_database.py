@@ -967,6 +967,178 @@ def test_purge_orphaned_solutions_tolerates_tracked_id_missing_on_disk(
     assert purged == []
     assert example_database.get_solution_ids(session.subject_id, session.id) == ['on_disk']
 
+
+# ---------------------------------------------------------------------------
+# Subject-scoped solution storage (session_split refactor, SESSION_SPLIT_DESIGN.md).
+# These live alongside a subject rather than under a specific Session, so that a
+# Solution can be referenced by a PlanningSession's pre-solutions, a Plan's
+# pre-solutions, or a SonicationSession's final solution without duplication.
+# ---------------------------------------------------------------------------
+
+def test_subject_scoped_solution_paths(example_database: Database, tmp_path: Path):
+    """The subject-scoped path helpers point under ``subjects/{sid}/solutions/``."""
+    subject_id = "example_subject"
+    solution_id = "sol_a"
+    solutions_index = example_database.get_subject_solutions_filename(subject_id)
+    solution_dir = example_database.get_subject_solution_dir(subject_id, solution_id)
+    solution_json = example_database.get_subject_solution_filepath(subject_id, solution_id)
+    analysis_json = example_database.get_subject_solution_analysis_filepath(subject_id, solution_id)
+
+    assert solutions_index == tmp_path / "example_db/subjects/example_subject/solutions/solutions.json"
+    assert solution_dir == tmp_path / "example_db/subjects/example_subject/solutions/sol_a"
+    assert solution_json == solution_dir / "sol_a.json"
+    assert analysis_json == solution_dir / "sol_a_analysis.json"
+
+def test_subject_scoped_solution_ids_empty_by_default(example_database: Database):
+    """A fresh subject has no subject-scoped solutions and no index file yet."""
+    subject_id = "example_subject"
+    assert example_database.get_subject_solution_ids(subject_id) == []
+    # No warning: subject-scoped storage is optional and empty state is legitimate
+    # (unlike legacy session-scoped storage where a missing file is unexpected).
+    assert not example_database.get_subject_solutions_filename(subject_id).exists()
+
+def test_write_solution_at_subject_scope(example_database: Database):
+    subject_id = "example_subject"
+    solution = Solution(name="bleh", id="new_subject_solution")
+
+    assert solution.id not in example_database.get_subject_solution_ids(subject_id)
+
+    example_database.write_solution_at_subject_scope(subject_id, solution)
+    reloaded = example_database.load_solution_at_subject_scope(subject_id, solution.id)
+    assert dataclasses_are_equal(reloaded, solution)
+    assert solution.id in example_database.get_subject_solution_ids(subject_id)
+
+    # ERROR on conflict
+    with pytest.raises(ValueError, match="already exists"):
+        example_database.write_solution_at_subject_scope(
+            subject_id, solution, on_conflict=OnConflictOpts.ERROR,
+        )
+
+    # SKIP keeps original
+    solution.name = "new_name"
+    example_database.write_solution_at_subject_scope(
+        subject_id, solution, on_conflict=OnConflictOpts.SKIP,
+    )
+    reloaded = example_database.load_solution_at_subject_scope(subject_id, solution.id)
+    assert reloaded.name == "bleh"
+
+    # OVERWRITE replaces it
+    example_database.write_solution_at_subject_scope(
+        subject_id, solution, on_conflict=OnConflictOpts.OVERWRITE,
+    )
+    reloaded = example_database.load_solution_at_subject_scope(subject_id, solution.id)
+    assert reloaded.name == "new_name"
+
+def test_load_solution_at_subject_scope_missing(example_database: Database):
+    with pytest.raises(FileNotFoundError, match="Solution file not found at subject scope"):
+        example_database.load_solution_at_subject_scope("example_subject", "bogus_solution_id")
+
+def test_write_load_solution_analysis_at_subject_scope(example_database: Database):
+    """SolutionAnalysis writes next to the subject-scoped solution and reloads faithfully."""
+    subject_id = "example_subject"
+    solution = Solution(name="bleh", id="analysis_subject_solution")
+    example_database.write_solution_at_subject_scope(subject_id, solution)
+
+    analysis = SolutionAnalysis(mainlobe_isppa_Wcm2=[1.0, 2.0], beamwidth_ax_6dB_mm=[3.0, 4.0], MI=5.0)
+    example_database.write_solution_analysis_at_subject_scope(subject_id, solution.id, analysis)
+
+    analysis_filepath = example_database.get_subject_solution_analysis_filepath(subject_id, solution.id)
+    assert analysis_filepath.is_file()
+    assert analysis_filepath.name == f"{solution.id}_analysis.json"
+
+    reloaded = example_database.load_solution_analysis_at_subject_scope(subject_id, solution.id)
+    assert dataclasses_are_equal(reloaded, analysis)
+
+    # ERROR on conflict
+    with pytest.raises(ValueError, match="already exists"):
+        example_database.write_solution_analysis_at_subject_scope(
+            subject_id, solution.id, analysis, on_conflict=OnConflictOpts.ERROR,
+        )
+
+    # SKIP keeps original
+    skipped = SolutionAnalysis(mainlobe_isppa_Wcm2=[9.0], MI=99.0)
+    example_database.write_solution_analysis_at_subject_scope(
+        subject_id, solution.id, skipped, on_conflict=OnConflictOpts.SKIP,
+    )
+    assert dataclasses_are_equal(
+        example_database.load_solution_analysis_at_subject_scope(subject_id, solution.id),
+        analysis,
+    )
+
+    # OVERWRITE replaces it
+    overwritten = SolutionAnalysis(mainlobe_isppa_Wcm2=[7.0], MI=77.0)
+    example_database.write_solution_analysis_at_subject_scope(
+        subject_id, solution.id, overwritten, on_conflict=OnConflictOpts.OVERWRITE,
+    )
+    assert dataclasses_are_equal(
+        example_database.load_solution_analysis_at_subject_scope(subject_id, solution.id),
+        overwritten,
+    )
+
+def test_load_solution_analysis_at_subject_scope_missing(example_database: Database):
+    with pytest.raises(FileNotFoundError, match="SolutionAnalysis file not found at subject scope"):
+        example_database.load_solution_analysis_at_subject_scope(
+            "example_subject", "bogus_solution_id",
+        )
+
+def test_delete_solution_at_subject_scope(example_database: Database):
+    """delete_solution_at_subject_scope removes the files and trims the subject index."""
+    subject_id = "example_subject"
+    solution_a = Solution(name="A", id="subj_sol_a")
+    solution_b = Solution(name="B", id="subj_sol_b")
+    example_database.write_solution_at_subject_scope(subject_id, solution_a)
+    example_database.write_solution_at_subject_scope(subject_id, solution_b)
+
+    solution_a_dir = example_database.get_subject_solution_dir(subject_id, solution_a.id)
+    assert solution_a_dir.is_dir()
+    assert set(example_database.get_subject_solution_ids(subject_id)) == {"subj_sol_a", "subj_sol_b"}
+
+    example_database.delete_solution_at_subject_scope(subject_id, solution_a.id)
+
+    assert not solution_a_dir.exists()
+    assert example_database.get_subject_solution_ids(subject_id) == ["subj_sol_b"]
+
+    # ERROR when the solution does not exist
+    with pytest.raises(ValueError, match="does not exist"):
+        example_database.delete_solution_at_subject_scope(subject_id, "subj_sol_a")
+
+    # SKIP is a no-op when the solution does not exist
+    example_database.delete_solution_at_subject_scope(
+        subject_id, "subj_sol_a", on_conflict=OnConflictOpts.SKIP,
+    )
+    assert example_database.get_subject_solution_ids(subject_id) == ["subj_sol_b"]
+
+def test_subject_and_session_scoped_solutions_do_not_collide(
+    example_database: Database, example_subject: Subject,
+):
+    """A subject-scoped and session-scoped solution with the same id coexist on disk."""
+    subject_id = example_subject.id
+    session = Session(name="dual_scope", id="dual_scope_session", subject_id=subject_id)
+    example_database.write_session(example_subject, session)
+
+    session_solution = Solution(name="session_scoped", id="shared_id")
+    subject_solution = Solution(name="subject_scoped", id="shared_id")
+
+    example_database.write_solution(session, session_solution)
+    example_database.write_solution_at_subject_scope(subject_id, subject_solution)
+
+    # Each scope's index sees only its own solution.
+    assert "shared_id" in example_database.get_solution_ids(subject_id, session.id)
+    assert "shared_id" in example_database.get_subject_solution_ids(subject_id)
+
+    # Each scope's load returns its own copy.
+    session_reloaded = example_database.load_solution(session, "shared_id")
+    subject_reloaded = example_database.load_solution_at_subject_scope(subject_id, "shared_id")
+    assert session_reloaded.name == "session_scoped"
+    assert subject_reloaded.name == "subject_scoped"
+
+    # Deleting one does not touch the other.
+    example_database.delete_solution_at_subject_scope(subject_id, "shared_id")
+    assert example_database.get_subject_solution_ids(subject_id) == []
+    assert "shared_id" in example_database.get_solution_ids(subject_id, session.id)
+    assert example_database.load_solution(session, "shared_id").name == "session_scoped"
+
+
 def test_get_photoscan_absolute_filepaths_info(example_database:Database):
     subject_id = "example_subject"
     session_id = "example_session"

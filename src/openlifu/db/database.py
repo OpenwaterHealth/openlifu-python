@@ -679,6 +679,162 @@ class Database:
             self.delete_solution(session, sid, on_conflict=OnConflictOpts.SKIP)
         return purged
 
+    # ------------------------------------------------------------------
+    # Subject-scoped solution read/write/delete (see SESSION_SPLIT_DESIGN.md).
+    # ------------------------------------------------------------------
+
+    def write_solution_at_subject_scope(
+        self,
+        subject_id: str,
+        solution: Solution,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Write a Solution to the subject-scoped ``solutions/{sid}/`` directory.
+
+        The solution JSON and ``.nc`` files land at
+        ``subjects/{subject_id}/solutions/{solution.id}/``, and the solution id is
+        added to the subject's ``solutions/solutions.json`` index. No Session is
+        required or referenced.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        solution_ids = self.get_subject_solution_ids(subject_id)
+
+        if solution.id in solution_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Solution with ID {solution.id} already exists at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting solution with ID {solution.id} at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping solution with ID {solution.id} at subject scope as it already exists."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+
+        solution_json_filepath = self.get_subject_solution_filepath(subject_id, solution.id)
+        solution_json_filepath.parent.mkdir(parents=True, exist_ok=True)
+        solution.to_files(solution_json_filepath)
+
+        if solution.id not in solution_ids:
+            solution_ids.append(solution.id)
+            self.write_subject_solution_ids(subject_id, solution_ids)
+
+        self.logger.info(
+            f"Wrote solution {solution.id} at subject scope for subject {subject_id}."
+        )
+
+    def load_solution_at_subject_scope(self, subject_id: str, solution_id: str) -> Solution:
+        """Load a subject-scoped Solution by id.
+
+        No Session is required or referenced. Raises ``FileNotFoundError`` if the solution
+        does not exist under ``subjects/{subject_id}/solutions/``.
+        """
+        solution_json_filepath = self.get_subject_solution_filepath(subject_id, solution_id)
+        if not (solution_json_filepath.exists() and solution_json_filepath.is_file()):
+            self.logger.error(
+                f"Solution file not found at subject scope for solution {solution_id}, subject {subject_id}"
+            )
+            raise FileNotFoundError(
+                f"Solution file not found at subject scope for solution {solution_id}, subject {subject_id}"
+            )
+        solution = Solution.from_files(solution_json_filepath)
+        self.logger.info(f"Loaded solution {solution_id} at subject scope for subject {subject_id}.")
+        return solution
+
+    def write_solution_analysis_at_subject_scope(
+        self,
+        subject_id: str,
+        solution_id: str,
+        analysis: SolutionAnalysis,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.OVERWRITE,
+    ) -> None:
+        """Write a SolutionAnalysis next to its parent subject-scoped Solution."""
+        on_conflict = _normalize_on_conflict(on_conflict)
+        analysis_filepath = self.get_subject_solution_analysis_filepath(subject_id, solution_id)
+        if analysis_filepath.exists():
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"SolutionAnalysis for solution {solution_id} already exists at subject scope."
+                )
+            if on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Skipping SolutionAnalysis for solution {solution_id} as it already exists at subject scope."
+                )
+                return
+            if on_conflict == OnConflictOpts.OVERWRITE:
+                self.logger.info(
+                    f"Overwriting SolutionAnalysis for solution {solution_id} at subject scope."
+                )
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error', 'overwrite', or 'skip'.")
+        analysis_filepath.parent.mkdir(parents=True, exist_ok=True)
+        analysis_filepath.write_text(analysis.to_json(compact=False))
+        self.logger.info(
+            f"Wrote SolutionAnalysis for solution {solution_id} at subject scope for subject {subject_id}."
+        )
+
+    def load_solution_analysis_at_subject_scope(
+        self, subject_id: str, solution_id: str
+    ) -> SolutionAnalysis:
+        """Load a SolutionAnalysis for a subject-scoped Solution."""
+        analysis_filepath = self.get_subject_solution_analysis_filepath(subject_id, solution_id)
+        if not (analysis_filepath.exists() and analysis_filepath.is_file()):
+            self.logger.error(
+                f"SolutionAnalysis file not found at subject scope for solution {solution_id}, subject {subject_id}"
+            )
+            raise FileNotFoundError(
+                f"SolutionAnalysis file not found at subject scope for solution {solution_id}, subject {subject_id}"
+            )
+        analysis = SolutionAnalysis.from_json(analysis_filepath.read_text())
+        self.logger.info(
+            f"Loaded SolutionAnalysis for solution {solution_id} at subject scope for subject {subject_id}."
+        )
+        return analysis
+
+    def delete_solution_at_subject_scope(
+        self,
+        subject_id: str,
+        solution_id: str,
+        on_conflict: OnConflictOpts | str = OnConflictOpts.ERROR,
+    ) -> None:
+        """Delete a subject-scoped Solution and its associated files.
+
+        Removes ``subjects/{subject_id}/solutions/{solution_id}/`` and drops
+        ``solution_id`` from the subject's ``solutions.json`` index. Does not consult
+        or affect any Session record.
+        """
+        on_conflict = _normalize_on_conflict(on_conflict)
+        solution_ids = self.get_subject_solution_ids(subject_id)
+
+        if solution_id not in solution_ids:
+            if on_conflict == OnConflictOpts.ERROR:
+                raise ValueError(
+                    f"Solution ID {solution_id} does not exist at subject scope for subject {subject_id}."
+                )
+            elif on_conflict == OnConflictOpts.SKIP:
+                self.logger.info(
+                    f"Cannot delete solution ID {solution_id} at subject scope as it does not exist for subject {subject_id}."
+                )
+                return
+            else:
+                raise ValueError("Invalid 'on_conflict' option. Use 'error' or 'skip'.")
+
+        solution_dir = self.get_subject_solution_dir(subject_id, solution_id)
+        if solution_dir.is_dir():
+            shutil.rmtree(solution_dir)
+
+        solution_ids.remove(solution_id)
+        self.write_subject_solution_ids(subject_id, solution_ids)
+
+        self.logger.info(
+            f"Removed solution {solution_id} at subject scope for subject {subject_id}."
+        )
+
     def choose_session(self, subject, options=None):
         # Implement the logic to choose a session
         raise NotImplementedError("Method not yet implemented")
@@ -780,6 +936,24 @@ class Database:
             return []
 
         return json.loads(solutions_filename.read_text())["solution_ids"]
+
+    def get_subject_solution_ids(self, subject_id: str) -> List[str]:
+        """List IDs of all solutions stored under the subject's subject-scoped ``solutions/`` directory.
+
+        Independent of the legacy session-scoped ``get_solution_ids``. Returns ``[]`` if the
+        subject has no solutions index file yet.
+        """
+        solutions_filename = self.get_subject_solutions_filename(subject_id)
+        if not (solutions_filename.exists() and solutions_filename.is_file()):
+            self.logger.info("Subject-scoped solutions file not found for subject %s.", subject_id)
+            return []
+        return json.loads(solutions_filename.read_text())["solution_ids"]
+
+    def write_subject_solution_ids(self, subject_id: str, solution_ids: List[str]) -> None:
+        """Overwrite the subject-scoped solutions index."""
+        solutions_filepath = self.get_subject_solutions_filename(subject_id)
+        solutions_filepath.parent.mkdir(parents=True, exist_ok=True)
+        solutions_filepath.write_text(json.dumps({"solution_ids": solution_ids}))
 
     def get_photocollection_reference_numbers(self, subject_id: str, session_id: str) -> List[str]:
         """Get a list of reference numbers of the photocollections associated with the given session"""
@@ -1186,6 +1360,32 @@ class Database:
         """Get the path to the overall solutions json file for the requested session"""
         session_dir = self.get_session_dir(subject_id, session_id)
         return Path(session_dir) / 'solutions' / 'solutions.json'
+
+    # ------------------------------------------------------------------
+    # Subject-scoped solution storage (see SESSION_SPLIT_DESIGN.md).
+    #
+    # In the split-session model, Solutions live under the subject rather
+    # than under a specific Session. This lets a Solution be referenced
+    # (via SolutionInfo) by a PlanningSession's pre-solutions list, a
+    # finalized Plan's pre-solutions list, or a SonicationSession's
+    # final solution field, without ever being duplicated on disk.
+    # ------------------------------------------------------------------
+
+    def get_subject_solutions_filename(self, subject_id: str) -> Path:
+        """Path to the subject-scoped solutions index (``subjects/{sid}/solutions/solutions.json``)."""
+        return Path(self.get_subject_dir(subject_id)) / 'solutions' / 'solutions.json'
+
+    def get_subject_solution_dir(self, subject_id: str, solution_id: str) -> Path:
+        """Directory holding a subject-scoped solution's files."""
+        return Path(self.get_subject_dir(subject_id)) / 'solutions' / solution_id
+
+    def get_subject_solution_filepath(self, subject_id: str, solution_id: str) -> Path:
+        """Path to a subject-scoped solution's JSON file."""
+        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}.json"
+
+    def get_subject_solution_analysis_filepath(self, subject_id: str, solution_id: str) -> Path:
+        """Path to a subject-scoped solution's analysis JSON, sitting next to the solution."""
+        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}_analysis.json"
 
     def get_photocollections_filename(self, subject_id, session_id) -> Path:
         """Get the path to the overall photocollections json file for the requested session"""
