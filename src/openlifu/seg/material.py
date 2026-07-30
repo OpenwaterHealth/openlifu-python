@@ -99,28 +99,28 @@ WATER = Material(name="water",
 TISSUE = Material(name="tissue",
                   sound_speed=1540.0,
                   density=1000.0,
-                  attenuation=0.0,
+                  attenuation=0.3,
                   specific_heat=3600.0,
                   thermal_conductivity=0.5)
 
 SKULL = Material(name="skull",
                  sound_speed=4080.0,
                  density=1900.0,
-                 attenuation=0.0,
+                 attenuation=0.6,
                  specific_heat=1100.0,
                  thermal_conductivity=0.3)
 
 AIR = Material(name="air",
                sound_speed=344.0,
                density=1.25,
-               attenuation=0.0,
+               attenuation=1.0,
                specific_heat=1012.0,
                thermal_conductivity=0.025)
 
 STANDOFF = Material(name="standoff",
                     sound_speed=1420.0,
                     density=1000.0,
-                    attenuation=1.0,
+                    attenuation=0.2,
                     specific_heat=4182.0,
                     thermal_conductivity=0.598)
 

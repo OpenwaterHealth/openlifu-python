@@ -7,7 +7,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Dict, List, Tuple
+from typing import Annotated, Dict, List, Literal, Tuple
 
 import numpy as np
 import xarray as xa
@@ -25,6 +25,11 @@ from openlifu.plan.solution_analysis import (
     model_tx_temperature_rise,
 )
 from openlifu.sim import SimSetup, run_simulation
+from openlifu.sim.thermal import (
+    compute_heat_source,
+    generate_pulse_events,
+    run_thermal_simulation,
+)
 from openlifu.util.annotations import OpenLIFUFieldData
 from openlifu.util.checkgpu import gpu_available
 from openlifu.util.json import PYFUSEncoder
@@ -186,6 +191,146 @@ class Solution:
                 for i, sim in enumerate(simulation_outputs_to_stack)
             ],
             dim='focal_point_index',
+        )
+
+    def simulate_thermal(
+        self,
+        params: xa.Dataset,
+        acoustic_result: xa.Dataset | None = None,
+        pressure_field: str = 'p_min',
+        alpha_power: float = 0.9,
+        dt: float = 0.1,
+        t_end: float | None = None,
+        oversample: int = 1,
+        T0: float = 0.0,
+        T_init: np.ndarray | None = None,
+        mode: Literal['direct', 'superpose', 'impulse'] = 'impulse',
+    ) -> xa.Dataset:
+        """Run a thermal diffusion simulation for this Solution.
+
+        Uses the acoustic pressure field (from a prior call to :meth:`simulate`
+        or provided via ``acoustic_result``) together with tissue parameter
+        maps to compute the volumetric heat deposition rate at each focus, then
+        integrates the heterogeneous heat equation over the pulse sequence.
+
+        For typical LIFU parameters (pulses of 1-100 ms with sequences of
+        seconds to minutes), the default ``mode='impulse'`` marches a single
+        temperature field forward in time and applies each pulse as an
+        instantaneous energy deposit. Pulse events do NOT need to be aligned
+        with the output-``dt`` grid: fractional sub-steps are inserted at
+        every event, so multiple pulses per output step -- including pulses
+        that would fall between samples -- all deposit their energy exactly.
+        This is dramatically faster than resolving pulse edges directly and,
+        for ``pulse_duration`` much smaller than the thermal timescale, is
+        essentially exact.
+
+        .. warning:: The default openlifu ``Material`` definitions in
+           :mod:`openlifu.seg.material` have ``attenuation=0`` for water,
+           tissue, skull, and air. With those defaults the heat deposition
+           ``Q = alpha * p^2 / (rho * c)`` is zero and no temperature rise
+           will be simulated. Pass a segmentation method whose materials use
+           realistic ``attenuation`` values (e.g. 0.3-0.5 dB/cm/MHz for
+           tissue, ~4 dB/cm/MHz for skull) if you want to see thermal effects.
+
+        Args:
+            params: Tissue parameter maps (an xarray Dataset). Must contain
+                ``density``, ``sound_speed``, ``attenuation``, ``specific_heat``,
+                and ``thermal_conductivity`` variables on the simulation grid.
+                Typically produced by
+                :meth:`openlifu.seg.SegmentationMethod.seg_params` or
+                :meth:`openlifu.seg.SegmentationMethod.ref_params`.
+            acoustic_result: The acoustic simulation Dataset with a
+                ``focal_point_index`` dimension. If None, uses
+                ``self.simulation_result``.
+            pressure_field: Name of the pressure variable in
+                ``acoustic_result`` to use for heat-source calculation.
+                Default ``'p_min'`` (peak-negative-pressure amplitude).
+            alpha_power: Power law exponent for attenuation. Default 0.9.
+            dt: Output time step (s). Default 0.1.
+            t_end: Simulation duration (s). If None, defaults to the full
+                sequence duration (as reported by ``self.sequence``).
+            oversample: Number of internal sub-steps per output step for the
+                explicit diffusion solver.
+            T0: Background temperature offset (degC). Only affects the
+                reported peak temperature; the stored ``temperature_rise`` is
+                always the delta from ambient.
+            T_init: Optional initial temperature-rise field.
+            mode: ``'impulse'`` (default) treats each pulse as an
+                instantaneous energy deposit and superposes per-focus
+                impulse responses -- ideal for pulses much shorter than the
+                thermal diffusion timescale. ``'superpose'`` precomputes a
+                single-pulse response with the source held on for
+                ``pulse_duration`` and superposes shifted copies.
+                ``'direct'`` walks the sequence event by event, matching the
+                LOFUgen1 MATLAB implementation.
+
+        Returns:
+            An xarray Dataset with ``temperature_rise`` (dims ``t, x, y, z``),
+            ``Tmax``, and ``sim_time`` variables. See
+            :func:`openlifu.sim.run_thermal_simulation` for details.
+        """
+        if acoustic_result is None:
+            if self.simulation_result is None or len(self.simulation_result) == 0:
+                raise ValueError(
+                    "No acoustic_result provided and no simulation_result found on the Solution. "
+                    "Call `simulate()` first or pass `acoustic_result` explicitly."
+                )
+            acoustic_result = self.simulation_result
+        if pressure_field not in acoustic_result:
+            raise ValueError(
+                f"Pressure field '{pressure_field}' not found in acoustic_result. "
+                f"Available: {list(acoustic_result.data_vars)}"
+            )
+
+        pressure_da = acoustic_result[pressure_field]
+        if 'focal_point_index' not in pressure_da.dims:
+            raise ValueError(
+                f"acoustic_result['{pressure_field}'] must have a 'focal_point_index' dim."
+            )
+        pressure_da = pressure_da.transpose('focal_point_index', 'x', 'y', 'z')
+
+        Q_data = compute_heat_source(
+            params=params,
+            pressure=pressure_da.data,
+            freq=self.pulse.frequency,
+            alpha_power=alpha_power,
+        )
+        heat_sources = xa.DataArray(
+            Q_data,
+            dims=['focal_point_index', 'x', 'y', 'z'],
+            coords={
+                'focal_point_index': pressure_da.coords['focal_point_index'],
+                'x': pressure_da.coords['x'],
+                'y': pressure_da.coords['y'],
+                'z': pressure_da.coords['z'],
+            },
+            attrs={'units': 'W/m^3', 'long_name': 'Volumetric heat deposition rate'},
+        )
+
+        events = generate_pulse_events(
+            pulse_count=self.sequence.pulse_count,
+            pulse_interval=self.sequence.pulse_interval,
+            pulse_train_count=self.sequence.pulse_train_count,
+            pulse_train_interval=self.sequence.pulse_train_interval,
+            pulse_duration=self.pulse.duration,
+            num_foci=self.num_foci(),
+            order=self.order,
+        )
+
+        if t_end is None:
+            t_end = self.sequence.get_sequence_duration()
+
+        return run_thermal_simulation(
+            heat_sources=heat_sources,
+            params=params,
+            events=events,
+            dt=dt,
+            t_end=t_end,
+            oversample=oversample,
+            T0=T0,
+            T_init=T_init,
+            mode=mode,
+            pulse_duration=self.pulse.duration,
         )
 
     def get_mainlobe_mask(self,
