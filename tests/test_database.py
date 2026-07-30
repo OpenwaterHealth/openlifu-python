@@ -986,8 +986,8 @@ def test_subject_scoped_solution_paths(example_database: Database, tmp_path: Pat
 
     assert solutions_index == tmp_path / "example_db/subjects/example_subject/solutions/solutions.json"
     assert solution_dir == tmp_path / "example_db/subjects/example_subject/solutions/sol_a"
-    assert solution_json == solution_dir / "sol_a.json"
-    assert analysis_json == solution_dir / "sol_a_analysis.json"
+    assert solution_json == solution_dir / "sol_a.solution.json"
+    assert analysis_json == solution_dir / "sol_a.solution_analysis.json"
 
 def test_subject_scoped_solution_ids_empty_by_default(example_database: Database):
     """A fresh subject has no subject-scoped solutions and no index file yet."""
@@ -1044,7 +1044,7 @@ def test_write_load_solution_analysis_at_subject_scope(example_database: Databas
 
     analysis_filepath = example_database.get_subject_solution_analysis_filepath(subject_id, solution.id)
     assert analysis_filepath.is_file()
-    assert analysis_filepath.name == f"{solution.id}_analysis.json"
+    assert analysis_filepath.name == f"{solution.id}.solution_analysis.json"
 
     reloaded = example_database.load_solution_analysis_at_subject_scope(subject_id, solution.id)
     assert dataclasses_are_equal(reloaded, analysis)

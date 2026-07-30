@@ -1860,12 +1860,20 @@ class Database:
         return Path(self.get_subject_dir(subject_id)) / 'solutions' / solution_id
 
     def get_subject_solution_filepath(self, subject_id: str, solution_id: str) -> Path:
-        """Path to a subject-scoped solution's JSON file."""
-        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}.json"
+        """Path to a subject-scoped solution's JSON file (``{solution_id}.solution.json``).
+
+        The ``.solution.json`` extension identifies the file type so the raw filename
+        (rather than an id-suffix convention) carries the discriminator across sibling
+        tables in a future relational-DB migration.
+        """
+        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}.solution.json"
 
     def get_subject_solution_analysis_filepath(self, subject_id: str, solution_id: str) -> Path:
-        """Path to a subject-scoped solution's analysis JSON, sitting next to the solution."""
-        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}_analysis.json"
+        """Path to a subject-scoped solution's analysis JSON, sitting next to the solution.
+
+        Uses ``.solution_analysis.json`` to match the ``.solution.json`` companion.
+        """
+        return self.get_subject_solution_dir(subject_id, solution_id) / f"{solution_id}.solution_analysis.json"
 
     def get_photocollections_filename(self, subject_id, session_id) -> Path:
         """Get the path to the overall photocollections json file for the requested session"""
@@ -1917,8 +1925,13 @@ class Database:
         return Path(self.get_subject_dir(subject_id)) / 'plans' / plan_id
 
     def get_plan_filename(self, subject_id: str, plan_id: str) -> Path:
-        """Path to a Plan's JSON file."""
-        return self.get_plan_dir(subject_id, plan_id) / f'{plan_id}.json'
+        """Path to a Plan's JSON file (``{plan_id}.plan.json``).
+
+        The ``.plan.json`` extension identifies the file type so the id itself does
+        not need a ``_plan`` suffix; the same ``id`` can be reused across a
+        PlanningSession, a Plan finalized from it, and a SonicationSession using it.
+        """
+        return self.get_plan_dir(subject_id, plan_id) / f'{plan_id}.plan.json'
 
     def get_planning_sessions_filename(self, subject_id: str) -> Path:
         """Path to the subject-scoped planning-sessions index."""
@@ -1929,8 +1942,8 @@ class Database:
         return Path(self.get_subject_dir(subject_id)) / 'planning_sessions' / planning_session_id
 
     def get_planning_session_filename(self, subject_id: str, planning_session_id: str) -> Path:
-        """Path to a PlanningSession's JSON file."""
-        return self.get_planning_session_dir(subject_id, planning_session_id) / f'{planning_session_id}.json'
+        """Path to a PlanningSession's JSON file (``{planning_session_id}.planning.json``)."""
+        return self.get_planning_session_dir(subject_id, planning_session_id) / f'{planning_session_id}.planning.json'
 
     def get_sonication_sessions_filename(self, subject_id: str) -> Path:
         """Path to the subject-scoped sonication-sessions index."""
@@ -1941,8 +1954,8 @@ class Database:
         return Path(self.get_subject_dir(subject_id)) / 'sonication_sessions' / sonication_session_id
 
     def get_sonication_session_filename(self, subject_id: str, sonication_session_id: str) -> Path:
-        """Path to a SonicationSession's JSON file."""
-        return self.get_sonication_session_dir(subject_id, sonication_session_id) / f'{sonication_session_id}.json'
+        """Path to a SonicationSession's JSON file (``{sonication_session_id}.sonication.json``)."""
+        return self.get_sonication_session_dir(subject_id, sonication_session_id) / f'{sonication_session_id}.sonication.json'
 
     def get_subject_photoscans_filename(self, subject_id: str) -> Path:
         """Path to the subject-scoped photoscans index."""
