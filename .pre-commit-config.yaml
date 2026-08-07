@@ -62,7 +62,7 @@ repos:
     rev: "v2.2.6"
     hooks:
       - id: codespell
-        exclude: .*\.ipynb # exclude notebooks because images are sometimes captured in spell check
+        exclude: ^(.*\.ipynb|literature_library\.md)$ # exclude notebooks because images are sometimes captured in spell check, exclude literature_library.md because author names are flagged as typos
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: "v0.10.0.1"
