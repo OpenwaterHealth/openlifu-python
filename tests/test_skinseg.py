@@ -164,7 +164,7 @@ def test_spherical_interpolator_from_mesh(use_embree):
     xyz_affine_vtkmat.DeepCopy(xyz_affine.ravel())
     xyz_transform = vtk.vtkTransform()
     xyz_transform.SetMatrix(xyz_affine_vtkmat)
-    transform_filter = vtk.vtkTransformPolyDataFilter()
+    transform_filter = vtk.vtkTransformFilter()
     transform_filter.SetTransform(xyz_transform)
     transform_filter.SetInputData(sphere_polydata)
     transform_filter.Update()

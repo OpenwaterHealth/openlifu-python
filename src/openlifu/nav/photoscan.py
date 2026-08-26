@@ -218,7 +218,7 @@ def convert_between_ras_and_lps(mesh : vtk.vtkPointSet) -> vtk.vtkPointSet:
     transform_ras_to_lps = vtk.vtkTransform()
     transform_ras_to_lps.Scale(-1,-1,1)
 
-    transformFilter = vtk.vtkTransformPolyDataFilter()
+    transformFilter = vtk.vtkTransformFilter()
     transformFilter.SetInputData(mesh)
     transformFilter.SetTransform(transform_ras_to_lps)
     transformFilter.Update()
