@@ -581,6 +581,34 @@ def test_write_volume(example_database:Database, tmp_path:Path):
     assert(volume_filepath.name == "example_volume_2.json")
     assert((volume_filepath.parent/"example_volume_2.nii").exists())
 
+def test_issue_136(example_database:Database, tmp_path:Path):
+    subject_id = "example_subject"
+    volume_id = "a_volume_id"
+    volume_name = "a_volume_name"
+    volume_data_path = Path(tmp_path/'test_db_files/a_volume_filename.nii')
+    volume_data_path.parent.mkdir(parents=True, exist_ok=True)
+    volume_data_path.touch()
+    volume_data_path2 = Path(tmp_path/'test_db_files/a_different_volume_filename.nii')
+    volume_data_path2.parent.mkdir(parents=True, exist_ok=True)
+    volume_data_path2.touch()
+
+    # write volume with the data path volume_data_path
+    example_database.write_volume(subject_id, volume_id, volume_name, volume_data_path)
+
+    # check that the file is there in the DB with the expected name
+    volume_filepath = example_database.get_volume_metadata_filepath(subject_id, volume_id)
+    assert((volume_filepath.parent/volume_data_path.name).exists())
+
+    # now overwrite using a different volume data path volume_data_path2, with a different filename
+    example_database.write_volume(subject_id, volume_id, volume_name, volume_data_path2, on_conflict=OnConflictOpts.OVERWRITE)
+
+    # check that the file is there in the DB with the expected name
+    volume_filepath = example_database.get_volume_metadata_filepath(subject_id, volume_id)
+    assert((volume_filepath.parent/volume_data_path2.name).exists())
+
+    # check that the old file was removed
+    assert(not (volume_filepath.parent/volume_data_path.name).exists())
+
 def test_load_solution(example_database:Database, example_session:Session):
     with pytest.raises(FileNotFoundError,match="Solution file not found"):
         example_database.load_solution(example_session, "bogus_solution_id")
