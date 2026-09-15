@@ -34,8 +34,10 @@ class Cloud:
     def __init__(self, environment: str = ENV_PROD):
         if environment == ENV_DEV:
             api_url = API_URL_DEV
-        else:
+        elif environment == ENV_PROD:
             api_url = API_URL_PROD
+        else:
+            raise ValueError(f"Unsupported cloud environment {environment!r}. Expected {ENV_DEV!r} or {ENV_PROD!r}.")
         self._filesystem_observer = FilesystemObserver(self._on_file_system_update)
         self._api = Api(api_url)
         self._websocket = Websocket(api_url, self._on_websocket_update)
