@@ -56,11 +56,12 @@ class Wheel(FocalPattern):
             theta = 2*np.pi*i/self.num_spokes
             local_position = self.spoke_radius * np.array([np.cos(theta), np.sin(theta), 0.0])
             position = np.dot(m, np.append(local_position, 1.0))[:3]
-            spoke = Point(id=f"{target.id}_{np.rad2deg(theta):.0f}deg",
-                              name=f"{target.name} ({np.rad2deg(theta):.0f}°)",
-                              position=position,
-                              units=self.distance_units,
-                              radius=target.radius)
+            spoke = Point(
+    id=f"{target.id}_{np.rad2deg(theta):.0f}deg",
+    name=f"{target.name} ({np.rad2deg(theta):.0f}°)",
+    position=position,
+    units=self.distance_units,
+)
             targets.append(spoke)
         return targets
 

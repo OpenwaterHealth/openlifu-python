@@ -52,7 +52,7 @@ from openlifu.xdc import Transducer
 # This is a `Point` object representing the desired focal location.
 
 # %%
-target = Point(position=np.array([0, 0, 50]), units="mm", radius=0.5) # 50mm depth, small radius
+target = Point(position=np.array([0, 0, 50]), units="mm")  # 50 mm depth
 print(f"Target: {target}")
 
 # %% [markdown]

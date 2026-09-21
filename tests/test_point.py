@@ -10,13 +10,11 @@ from openlifu.geo.point import Point
 @pytest.fixture()
 def example_point() -> Point:
     return Point(
-        id = "example_point",
+        id="example_point",
         name="Example point",
-        color=(0.,0.7, 0.2),
-        radius=1.5,
-        position=np.array([-10.,0,25]),
-        dims = ("R", "A", "S"),
-        units = "m",
+        position=np.array([-10., 0, 25]),
+        dims=("R", "A", "S"),
+        units="m",
     )
 
 @pytest.mark.parametrize("compact_representation", [True, False])
