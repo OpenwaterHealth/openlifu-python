@@ -196,7 +196,8 @@ def test_solution_created_date():
     assert(now - tolerance <= solution.date_created <= now + tolerance)
 
 
-def test_solution_analyze_ratios(example_solution: Solution):
+@pytest.mark.parametrize("sidelobe_radius", [0.005, np.nan, float("nan")], ids=["finite", "numpy_nan", "float_nan"])
+def test_solution_analyze_ratios(example_solution: Solution, sidelobe_radius: float):
     """Test the calculation of mainlobe to sidelobe ratios in Solution.analyze()"""
     solution = example_solution
     # Use only one focus point for simplicity
@@ -242,7 +243,7 @@ def test_solution_analyze_ratios(example_solution: Solution):
     # Sidelobe radius will capture p_min_data[0,2,0,2] if it's outside mainlobe.
     options = SolutionAnalysisOptions(
         mainlobe_radius=0.005, # 5mm, should capture central voxel
-        sidelobe_radius=0.005, # 5mm, but mask is > sidelobe_radius, so it's outside this
+        sidelobe_radius=sidelobe_radius, # 5mm after resolving NaN, but mask is > sidelobe_radius, so it's outside this
                                  # and aspect ratio matters.
         mainlobe_aspect_ratio=(1,1,1), # Make it spherical for simplicity
         sidelobe_zmin=0.001, # well below focus

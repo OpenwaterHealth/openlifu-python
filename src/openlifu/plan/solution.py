@@ -222,7 +222,7 @@ class Solution:
         pnp_MPa_all = rescale_data_arr(rescale_coords(simulation_result['p_min'], options.distance_units),"MPa")
         ipa_Wcm2_all = rescale_data_arr(rescale_coords(simulation_result['intensity'], options.distance_units), "W/cm^2")
 
-        if options.sidelobe_radius is np.nan:
+        if np.isnan(options.sidelobe_radius):
             options.sidelobe_radius = options.mainlobe_radius
 
 

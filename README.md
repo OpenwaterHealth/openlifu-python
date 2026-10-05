@@ -152,7 +152,7 @@ Then check out the tagged version of the sample database that is compatible with
 this version of `openlifu`:
 
 ```bash
-git clone --depth 1 --branch openlifu-v0.20.0 https://github.com/OpenwaterHealth/openlifu-sample-database.git
+git clone --depth 1 --branch openlifu-v0.22 https://github.com/OpenwaterHealth/openlifu-sample-database.git
 cd openlifu-sample-database
 git lfs pull
 ```
