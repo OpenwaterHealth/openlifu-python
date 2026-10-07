@@ -377,5 +377,5 @@
   </g>
 
   <!-- Footer -->
-  <text x="820" y="1084" text-anchor="middle" font-family="Inter, sans-serif" font-size="9.5" fill="#94a3b8">openlifu v0.18.1 | Python 3.10-3.12 | AGPL-3.0 | k-wave-python, xarray, vtk, numpy, scipy, pyserial, nibabel, trimesh, onnxruntime</text>
+  <text x="820" y="1084" text-anchor="middle" font-family="Inter, sans-serif" font-size="9.5" fill="#94a3b8">openlifu v0.18.1 | Python 3.10-3.12 | Apache-2.0 | k-wave-python, xarray, vtk, numpy, scipy, pyserial, nibabel, trimesh, onnxruntime</text>
 </svg>

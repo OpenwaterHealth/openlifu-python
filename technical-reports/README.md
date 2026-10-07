@@ -90,7 +90,7 @@ Documents in this folder — including markdown, PDFs, and figures — are licen
 under [**CC BY 4.0**](./LICENSE).
 
 This is **separate from the software license governing the rest of this
-repository.** Source code in `openlifu-python` is licensed under AGPL-3.0. The
+repository.** Source code in `openlifu-python` is licensed under Apache-2.0. The
 document license applies only to the contents of `technical-reports/` and does
 not extend to any code referenced or reproduced within a report.
 
