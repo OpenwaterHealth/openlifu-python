@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Dict, Tuple
+from typing import Annotated, Dict, Tuple
 
 import numpy as np
 
@@ -21,12 +21,6 @@ class Point:
 
     name: Annotated[str, OpenLIFUFieldData("Point name", "Name of the point")] = "Point"
     """Name of the point"""
-
-    color: Annotated[Any, OpenLIFUFieldData("Color (RGB)", "RGB color of the point")] = (1.0, 0.0, 0.0)
-    """RGB color of the point"""
-
-    radius: Annotated[float, OpenLIFUFieldData("Radius", "Radius for rendering the point in the provided units")] = 1.0  # mm
-    """Radius for rendering the point in the provided units"""
 
     dims: Annotated[Tuple[str, str, str], OpenLIFUFieldData("Dimensions", "Names of the axes of the coordinate system being used")] = ("x", "y", "z")
     """Names of the axes of the coordinate system being used"""
@@ -74,33 +68,51 @@ class Point:
             m = np.dot(origin, m)
         return m
 
-    def get_polydata(self, transform: np.ndarray = np.eye(4), units=None):
+    def get_polydata(
+        self,
+        transform: np.ndarray = np.eye(4),
+        units=None,
+        radius: float = 1.0,
+    ):
         import vtk
+
         units = self.units if units is None else units
-        colors = vtk.vtkNamedColors()
         sphereSource = vtk.vtkSphereSource()
         scl = getunitconversion(self.units, units)
         pos = np.dot(transform, np.append(self.position * scl, 1.0))[:3]
         sphereSource.SetCenter(*pos)
-        sphereSource.SetRadius(self.radius * scl)
+        sphereSource.SetRadius(radius * scl)
         sphereSource.SetPhiResolution(100)
         sphereSource.SetThetaResolution(100)
         return sphereSource
 
-    def get_actor(self, transform: np.ndarray = np.eye(4), units=None):
+    def get_actor(
+        self,
+        transform: np.ndarray = np.eye(4),
+        units=None,
+        color=(1.0, 0.0, 0.0),
+        radius: float = 1.0,
+    ):
         import vtk
-        polydata = self.get_polydata(transform=transform, units=units)
+
+        polydata = self.get_polydata(
+            transform=transform,
+            units=units,
+            radius=radius,
+        )
+
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(polydata.GetOutputPort())
+
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
-        actor.GetProperty().SetColor(self.color)
+        actor.GetProperty().SetColor(color)
+
         return actor
 
     def rescale(self, units: str):
         scl = getunitconversion(self.units, units)
         self.position = self.position * scl
-        self.radius = self.radius * scl
         self.units = units
 
     def transform(
@@ -117,24 +129,22 @@ class Point:
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "name": self.name,
-            "color": self.color,
-            "radius": self.radius,
-            "position": self.position.tolist(),
-            "dims": self.dims,
-            "units": self.units,
-        }
+        "id": self.id,
+        "name": self.name,
+        "position": self.position.tolist(),
+        "dims": self.dims,
+        "units": self.units,
+    }
 
     @staticmethod
     def from_dict(point_data: Dict):
         """Create a Point object from a dictionary."""
-        if "color" in point_data:
-            if len(point_data["color"]) != 3:
-                raise ValueError(f"Color should have three components; got {point_data['color']}.")
-            point_data["color"] = tuple(float(point_data["color"][i]) for i in range(3))
-        if "radius" in point_data:
-            point_data["radius"] = float(point_data["radius"])
+        point_data = point_data.copy()
+
+        # Ignore legacy rendering properties.
+        point_data.pop("color", None)
+        point_data.pop("radius", None)
+
         if "position" in point_data:
             point_data["position"] = np.array(point_data["position"])
         if "dims" in point_data:

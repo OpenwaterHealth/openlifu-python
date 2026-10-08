@@ -44,7 +44,7 @@ from openlifu.xdc import Transducer  # We'll briefly touch on this
 # %% [markdown]
 # ## 1. `Point`
 #
-# A `Point` object defines a location in 3D space. It can also have a radius, making it a sphere.
+# A `Point` object defines a location in 3D space.
 # Positions are typically specified in millimeters.
 
 # %%
