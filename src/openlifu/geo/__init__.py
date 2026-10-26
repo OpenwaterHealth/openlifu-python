@@ -6,9 +6,13 @@ from openlifu.geo.transforms import (
     cartesian_to_spherical,
     cartesian_to_spherical_vectorized,
     create_standoff_transform,
+    lps_to_spherical,
+    lps_to_spherical_vectorized,
     spherical_coordinate_basis,
     spherical_to_cartesian,
     spherical_to_cartesian_vectorized,
+    spherical_to_lps,
+    spherical_to_lps_vectorized,
 )
 
 __all__ = [
@@ -18,6 +22,10 @@ __all__ = [
     "spherical_to_cartesian",
     "cartesian_to_spherical_vectorized",
     "spherical_to_cartesian_vectorized",
+    "lps_to_spherical",
+    "spherical_to_lps",
+    "lps_to_spherical_vectorized",
+    "spherical_to_lps_vectorized",
     "spherical_coordinate_basis",
     "create_standoff_transform",
 ]
