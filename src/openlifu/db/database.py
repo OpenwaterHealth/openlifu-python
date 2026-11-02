@@ -414,11 +414,17 @@ class Database:
 
         try:
             volume_ids = self.get_volume_ids(subject_id)
+            old_volume_data_filepath = None
             if volume_id in volume_ids:
                 if on_conflict == OnConflictOpts.ERROR:
                     raise ValueError(f"Volume with ID {volume_id} already exists for subject {subject_id}.")
                 elif on_conflict == OnConflictOpts.OVERWRITE:
                     self.logger.info(f"Overwriting volume with ID {volume_id} for subject {subject_id}.")
+                    volume_metadata_filepath = self.get_volume_metadata_filepath(subject_id, volume_id)
+                    if volume_metadata_filepath.exists():
+                        with open(volume_metadata_filepath) as file:
+                            old_volume_metadata = json.load(file)
+                        old_volume_data_filepath = volume_metadata_filepath.parent / old_volume_metadata["data_filename"]
                 elif on_conflict == OnConflictOpts.SKIP:
                     self.logger.info(f"Skipping volume with ID {volume_id} for subject {subject_id} as it already exists.")
                     return
@@ -434,6 +440,14 @@ class Database:
             with open(volume_metadata_filepath, 'w') as file:
                 file.write(volume_metadata_json)
             shutil.copy(Path(volume_data_filepath), Path(volume_metadata_filepath).parent)
+
+            new_volume_data_filepath = Path(volume_metadata_filepath).parent / Path(volume_data_filepath).name
+            if (
+                old_volume_data_filepath is not None
+                and old_volume_data_filepath != new_volume_data_filepath
+                and old_volume_data_filepath.exists()
+            ):
+                old_volume_data_filepath.unlink()
 
             if volume_id not in volume_ids:
                 volume_ids.append(volume_id)
