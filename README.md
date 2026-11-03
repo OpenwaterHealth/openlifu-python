@@ -18,7 +18,7 @@ identifying and mitigating risks associated with using this software.
 <!-- SPHINX-START -->
 
 `openlifu` is a toolbox for planning and controlling focused ultrasound
-treatments. It generally replicates the functionality developed in the MATLAB
+research sonications. It generally replicates the functionality developed in the MATLAB
 [open-TFUS toolbox](https://github.com/OpenwaterHealth/opw_neuromod_sw).
 
 ## Supported Versions
